@@ -1,0 +1,15 @@
+# This is the user used to run migrations. It owns the DB,
+# the schema, the tables, the functions. Everything.
+export DATABASE_MIGRATOR="eg_migrator"
+export DATABASE_MIGRATOR_PASSWORD="password_goes_here"
+
+# This is the URL for your actual application database
+export DATABASE_URL="postgres://${DATABASE_MIGRATOR}:${DATABASE_MIGRATOR_PASSWORD}@localhost/eg"
+
+# This is the URL for the "shadow" database used by graphile migrate
+# Only used in development
+export SHADOW_DATABASE_URL="postgres://${DATABASE_MIGRATOR}:${DATABASE_MIGRATOR_PASSWORD}@localhost/eg_shadow"
+
+# This is the URL with root database credentials
+# Only used in development
+export ROOT_DATABASE_URL="postgres://postgres:postgres@localhost/postgres"

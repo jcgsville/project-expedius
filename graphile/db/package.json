@@ -1,0 +1,10 @@
+{
+  "name": "expedius-graphile",
+  "version": "1.0.0",
+  "description": "Project expedius using the graphile suite",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "graphile-migrate": "^1.0.2"
+  }
+}
