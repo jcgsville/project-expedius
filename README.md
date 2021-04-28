@@ -92,7 +92,7 @@ No password reset. Though these are table stakes for many applications, I think
 I can get a sense of what it would be like to build a real service without
 actually implementing them.
 
-The story for authentication is pretty simple: it's what you'd expect of a classroom.
+The story for authorization is pretty simple: it's what you'd expect of a classroom.
 
 * Teachers can see the students in their classes
 * Students can see the students in their classes
