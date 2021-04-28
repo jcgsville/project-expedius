@@ -42,7 +42,8 @@
    * these.
    */
   "placeholders": {
-      ":DATABASE_MIGRATOR": "!ENV"
+      ":DATABASE_MIGRATOR": "!ENV",
+      ":API_ROLE": "!ENV"
   },
 
   /*
