@@ -20,6 +20,7 @@ drop schema if exists public;
 create schema if not exists extensions;
 create extension if not exists plpgsql with schema extensions;
 create extension if not exists "uuid-ossp" with schema extensions;
+create extension if not exists citext with schema extensions;
 -- This is required for every new role created
 grant usage on schema extensions to
     :DATABASE_MIGRATOR, :API_ROLE;
