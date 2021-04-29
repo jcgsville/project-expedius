@@ -1,8 +1,7 @@
 {
-  "name": "expedius-graphile",
+  "name": "expedius-graphile-db",
   "version": "1.0.0",
-  "description": "Project expedius using the graphile suite",
-  "main": "index.js",
+  "description": "Project expedius using the graphile suite - the DB migration tooling",
   "license": "MIT",
   "dependencies": {
     "graphile-migrate": "^1.0.2"
