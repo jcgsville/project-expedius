@@ -1,7 +1,7 @@
 /* eslint-disable no-undef */
 module.exports = {
     parser: '@typescript-eslint/parser',
-    plugins: ['@typescript-eslint', 'prettier'],
+    plugins: ['@typescript-eslint', 'prettier', 'prefer-arrow'],
     parserOptions: {
         project: './tsconfig.eslint.json',
         tsconfigRootDir: __dirname,
@@ -113,6 +113,7 @@ module.exports = {
         'no-unused-expressions': 'error',
         'no-useless-call': 'error',
         'no-useless-return': 'error',
+        'prefer-arrow/prefer-arrow-functions': 'error',
         'prettier/prettier': [
             'error',
             {
@@ -122,6 +123,7 @@ module.exports = {
                 semi: false,
             },
         ],
+        'prefer-arrow-callback': 'error',
         quotes: 'off',
         'quote-props': ['error', 'as-needed'],
         'require-await': 'off',

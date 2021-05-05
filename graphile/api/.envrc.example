@@ -1,0 +1,8 @@
+# This is the role / URL used by postgraphile to query the DB
+export API_ROLE=eg_api
+export API_ROLE_PASSWORD=some-password-here
+export DATABASE_URL="postgres://${API_ROLE}:${API_ROLE_PASSWORD}@localhost:5432/eg"
+
+# This is the environment you're in.
+# Today, only development and production are supported
+export NODE_ENV=development
