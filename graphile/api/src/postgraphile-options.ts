@@ -12,6 +12,9 @@ export const generatePostgraphileOptions = (): PostGraphileOptions => {
     return {
         graphiql: isDev,
         enhanceGraphiql: isDev,
+        exportGqlSchemaPath: isDev
+            ? `${__dirname}/../schema.graphql`
+            : undefined,
         allowExplain: isDev,
         showErrorStack: 'json',
         extendedErrors: ['hint', 'detail', 'errcode'],

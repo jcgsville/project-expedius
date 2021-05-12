@@ -5,6 +5,7 @@
     "license": "MIT",
     "scripts": {
         "build": "tsc",
+        "export-gql-schema": "EXPORT_GQL_SCHEMA_ONLY=t yarn run start:local",
         "lint": "eslint \"src/**/*.ts\"",
         "lint:fix": "eslint \"src/**/*.ts\" --fix",
         "start:local": "ts-node src/index.ts",

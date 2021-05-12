@@ -3,6 +3,7 @@ import { postgraphile } from 'postgraphile'
 import { addPostgraphileToFastify } from './add-postgraphile-to-fastify'
 import { generatePostgraphileOptions } from './postgraphile-options'
 import { constructPgPool } from './utils/construct-pg-pool'
+import { envVarToBool, portFromEnv } from './utils/env-utils'
 
 const pgPool = constructPgPool()
 const postgraphileDbSchemas = ['eg_public']
@@ -14,17 +15,18 @@ const postgraphileMiddleware = postgraphile(
     generatePostgraphileOptions()
 )
 
+if (envVarToBool('EXPORT_GQL_SCHEMA_ONLY')) {
+    fastifyInstance.log.info(
+        'Exporting the schema only. Returning before starting server.'
+    )
+    process.exit(0)
+}
+
 addPostgraphileToFastify(fastifyInstance, postgraphileMiddleware)
 
-// Declare a route
-fastifyInstance.get('/', async () => {
-    return { hello: 'world' }
-})
-
-// Run the server!
 const start = async () => {
     try {
-        await fastifyInstance.listen(3000)
+        await fastifyInstance.listen(portFromEnv('PORT', 13001))
     } catch (err) {
         fastifyInstance.log.error(err)
         process.exit(1)
