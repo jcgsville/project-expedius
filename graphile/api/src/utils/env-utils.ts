@@ -34,6 +34,7 @@ export const portFromEnv = (
     const envVar = process.env[variableName]
     if (envVar) {
         const portNumber = parseInt(envVar, 10)
+        // Usable port numbers taken from https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
         if (isNaN(portNumber) || portNumber < 1024 || portNumber > 49151) {
             throw new Error(`Port env var ${envVar} is not a valid port number`)
         }
