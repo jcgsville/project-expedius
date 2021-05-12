@@ -18,12 +18,12 @@ drop schema if exists public;
 -- schema in the search path. This will require qualified references for every
 -- application query. It's verbose, but it strikes me as the safest and cleanest
 create schema if not exists extensions;
+alter schema extensions owner to :DATABASE_MIGRATOR;
 create extension if not exists plpgsql with schema extensions;
 create extension if not exists "uuid-ossp" with schema extensions;
 create extension if not exists citext with schema extensions;
 -- This is required for every new role created
-grant usage on schema extensions to
-    :DATABASE_MIGRATOR, :API_ROLE;
+grant usage on schema extensions to :API_ROLE;
 alter database :DATABASE_NAME set search_path to 'extensions';
 
 -- Still trying to determine if this is overkill to separate the role creation
