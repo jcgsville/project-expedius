@@ -43,7 +43,7 @@ export const portFromEnv = (
     return defaultPort
 }
 
-const TRUTHY_ENV_VAR_VALUES_LOWER_CASED = ['y', 'yes', 't', 'true']
+const TRUTHY_ENV_VAR_VALUES_LOWER_CASED = ['y', 'yes', 't', 'true', '1']
 
 export const envVarToBool = (variableName: string): boolean => {
     const envVar = process.env[variableName]
