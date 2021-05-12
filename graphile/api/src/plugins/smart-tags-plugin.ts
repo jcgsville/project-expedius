@@ -30,7 +30,7 @@ export const SmartTagsPlugin = makeJSONPgSmartTagsPlugin({
             'eg_public.class': {
                 tags: {
                     // TODO: For now, omitting many achieves what I want,
-                    // but I suspect this will be a long term solution
+                    // but I suspect this will not be a long term solution
                     // I believe it's not possible to omit a constraint in
                     // one direction, so I may want to create a plugin for
                     // this
