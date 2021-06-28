@@ -4,7 +4,8 @@ import { PostGraphileOptions } from 'postgraphile'
 import { SmartTagsPlugin } from './plugins/smart-tags-plugin'
 import { NodePlugin } from 'graphile-build'
 import PgSimplifyInflectorPlugin from '@graphile-contrib/pg-simplify-inflector'
-import { RemoveQueryQueryPlugin } from './plugins/remove-root-query-plugin'
+import { RemoveRootQueryPlugin } from './plugins/remove-root-query-plugin'
+import { SrpLoginFlowPlugin } from './plugins/srp-login-flow-plugin'
 
 export const generatePostgraphileOptions = (): PostGraphileOptions => {
     const isDev = requireNodeEnv() === EnvironmentName.DEV
@@ -16,13 +17,14 @@ export const generatePostgraphileOptions = (): PostGraphileOptions => {
             ? `${__dirname}/../schema.graphql`
             : undefined,
         allowExplain: isDev,
-        showErrorStack: 'json',
-        extendedErrors: ['hint', 'detail', 'errcode'],
+        showErrorStack: isDev ? 'json' : undefined,
+        extendedErrors: isDev ? ['hint', 'detail', 'errcode'] : undefined,
         skipPlugins: [NodePlugin],
         appendPlugins: [
             PgSimplifyInflectorPlugin,
-            RemoveQueryQueryPlugin,
+            RemoveRootQueryPlugin,
             SmartTagsPlugin,
+            SrpLoginFlowPlugin,
         ],
     }
 }

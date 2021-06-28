@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 12.6
+-- Dumped from database version 12.7
 -- Dumped by pg_dump version 13.2
 
 SET statement_timeout = 0;
@@ -72,6 +72,30 @@ COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UU
 
 
 --
+-- Name: sign_up_result; Type: TYPE; Schema: eg_public; Owner: eg_migrator
+--
+
+CREATE TYPE eg_public.sign_up_result AS ENUM (
+    'USER_WITH_EMAIL_EXISTS',
+    'SUCCESS'
+);
+
+
+ALTER TYPE eg_public.sign_up_result OWNER TO eg_migrator;
+
+--
+-- Name: srp_creds; Type: TYPE; Schema: eg_public; Owner: eg_migrator
+--
+
+CREATE TYPE eg_public.srp_creds AS (
+	salt text,
+	verifier text
+);
+
+
+ALTER TYPE eg_public.srp_creds OWNER TO eg_migrator;
+
+--
 -- Name: user_type; Type: TYPE; Schema: eg_public; Owner: eg_migrator
 --
 
@@ -109,6 +133,25 @@ $$;
 ALTER FUNCTION eg_private.tg__class__teacher_correct_user_type() OWNER TO eg_migrator;
 
 --
+-- Name: tg__login_flow__delete_expired(); Type: FUNCTION; Schema: eg_private; Owner: eg_migrator
+--
+
+CREATE FUNCTION eg_private.tg__login_flow__delete_expired() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'extensions'
+    AS $$
+begin
+    delete from eg_private.login_flow
+    where expires_at < now() - interval '30 seconds';
+
+    return new;
+end;
+$$;
+
+
+ALTER FUNCTION eg_private.tg__login_flow__delete_expired() OWNER TO eg_migrator;
+
+--
 -- Name: tg__user__type_uneditable(); Type: FUNCTION; Schema: eg_private; Owner: eg_migrator
 --
 
@@ -124,9 +167,159 @@ $$;
 
 ALTER FUNCTION eg_private.tg__user__type_uneditable() OWNER TO eg_migrator;
 
+--
+-- Name: retrieve_login_flow(uuid); Type: FUNCTION; Schema: eg_public; Owner: eg_migrator
+--
+
+CREATE FUNCTION eg_public.retrieve_login_flow(login_flow_id uuid) RETURNS text
+    LANGUAGE sql STABLE STRICT SECURITY DEFINER
+    SET search_path TO 'extensions'
+    AS $$
+    select serialized_server_state
+    from eg_private.login_flow
+    where id = login_flow_id
+        and now() < expires_at;
+$$;
+
+
+ALTER FUNCTION eg_public.retrieve_login_flow(login_flow_id uuid) OWNER TO eg_migrator;
+
+--
+-- Name: save_login_flow(text); Type: FUNCTION; Schema: eg_public; Owner: eg_migrator
+--
+
+CREATE FUNCTION eg_public.save_login_flow(serialized_server_state text) RETURNS uuid
+    LANGUAGE sql STRICT SECURITY DEFINER
+    SET search_path TO 'extensions'
+    AS $$
+    insert into eg_private.login_flow(
+        serialized_server_state,
+        expires_at
+    ) values (
+        serialized_server_state,
+        now() + interval '1 minute'
+    ) returning id;
+$$;
+
+
+ALTER FUNCTION eg_public.save_login_flow(serialized_server_state text) OWNER TO eg_migrator;
+
+--
+-- Name: sign_up(extensions.citext, eg_public.user_type, text, text); Type: FUNCTION; Schema: eg_public; Owner: eg_migrator
+--
+
+CREATE FUNCTION eg_public.sign_up(email extensions.citext, user_type eg_public.user_type, verifier text, salt text) RETURNS eg_public.sign_up_result
+    LANGUAGE plpgsql STRICT SECURITY DEFINER
+    SET search_path TO 'extensions'
+    AS $$
+declare
+    _email citext := email;
+begin
+    if exists (select 1 from eg_public.user u where u.email = _email)
+    then return 'USER_WITH_EMAIL_EXISTS';
+    end if;
+
+    with inserted_user as (
+        insert into eg_public.user (
+            email,
+            name,
+            user_type
+        ) values (
+            _email,
+            -- We'll get back to names. I'm not sure I want them on public.user
+            -- and I'm not sure I want them to be required.
+            'Bob',
+            user_type
+        ) returning *
+    ), secrets as (
+        insert into eg_private.user_secrets (
+            user_id,
+            verifier
+        ) select
+            u.id,
+            verifier
+        from inserted_user u
+        returning *
+    ) insert into eg_public.user_login_info (
+        user_id,
+        email,
+        salt
+    ) select
+        u.id,
+        u.email,
+        salt
+    from inserted_user u;
+
+    return 'SUCCESS';
+end;
+$$;
+
+
+ALTER FUNCTION eg_public.sign_up(email extensions.citext, user_type eg_public.user_type, verifier text, salt text) OWNER TO eg_migrator;
+
+--
+-- Name: srp_creds_by_email(extensions.citext); Type: FUNCTION; Schema: eg_public; Owner: eg_migrator
+--
+
+CREATE FUNCTION eg_public.srp_creds_by_email(user_email extensions.citext) RETURNS eg_public.srp_creds
+    LANGUAGE sql STRICT SECURITY DEFINER
+    SET search_path TO 'extensions'
+    AS $$
+    select
+        uli.salt,
+        us.verifier
+    from eg_public.user u
+    join eg_public.user_login_info uli on u.id = uli.user_id
+    join eg_private.user_secrets us on u.id = us.user_id
+    where u.email = user_email;
+$$;
+
+
+ALTER FUNCTION eg_public.srp_creds_by_email(user_email extensions.citext) OWNER TO eg_migrator;
+
+--
+-- Name: user_login_salt(extensions.citext); Type: FUNCTION; Schema: eg_public; Owner: eg_migrator
+--
+
+CREATE FUNCTION eg_public.user_login_salt(user_email extensions.citext) RETURNS text
+    LANGUAGE sql STABLE
+    AS $$
+    select salt
+    from eg_public.user_login_info
+    where email = user_email;
+$$;
+
+
+ALTER FUNCTION eg_public.user_login_salt(user_email extensions.citext) OWNER TO eg_migrator;
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
+
+--
+-- Name: login_flow; Type: TABLE; Schema: eg_private; Owner: eg_migrator
+--
+
+CREATE TABLE eg_private.login_flow (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    serialized_server_state text NOT NULL,
+    expires_at timestamp with time zone NOT NULL
+);
+
+
+ALTER TABLE eg_private.login_flow OWNER TO eg_migrator;
+
+--
+-- Name: user_secrets; Type: TABLE; Schema: eg_private; Owner: eg_migrator
+--
+
+CREATE TABLE eg_private.user_secrets (
+    user_id uuid NOT NULL,
+    verifier text NOT NULL
+);
+
+
+ALTER TABLE eg_private.user_secrets OWNER TO eg_migrator;
 
 --
 -- Name: class; Type: TABLE; Schema: eg_public; Owner: eg_migrator
@@ -159,11 +352,64 @@ CREATE TABLE eg_public."user" (
 ALTER TABLE eg_public."user" OWNER TO eg_migrator;
 
 --
+-- Name: user_login_info; Type: TABLE; Schema: eg_public; Owner: eg_migrator
+--
+
+CREATE TABLE eg_public.user_login_info (
+    user_id uuid NOT NULL,
+    email extensions.citext NOT NULL,
+    salt text NOT NULL
+);
+
+
+ALTER TABLE eg_public.user_login_info OWNER TO eg_migrator;
+
+--
+-- Name: login_flow login_flow_pkey; Type: CONSTRAINT; Schema: eg_private; Owner: eg_migrator
+--
+
+ALTER TABLE ONLY eg_private.login_flow
+    ADD CONSTRAINT login_flow_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_secrets user_secrets_pkey; Type: CONSTRAINT; Schema: eg_private; Owner: eg_migrator
+--
+
+ALTER TABLE ONLY eg_private.user_secrets
+    ADD CONSTRAINT user_secrets_pkey PRIMARY KEY (user_id);
+
+
+--
 -- Name: class class_pkey; Type: CONSTRAINT; Schema: eg_public; Owner: eg_migrator
 --
 
 ALTER TABLE ONLY eg_public.class
     ADD CONSTRAINT class_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user unique_email; Type: CONSTRAINT; Schema: eg_public; Owner: eg_migrator
+--
+
+ALTER TABLE ONLY eg_public."user"
+    ADD CONSTRAINT unique_email UNIQUE (email);
+
+
+--
+-- Name: user unique_email_id; Type: CONSTRAINT; Schema: eg_public; Owner: eg_migrator
+--
+
+ALTER TABLE ONLY eg_public."user"
+    ADD CONSTRAINT unique_email_id UNIQUE (email, id);
+
+
+--
+-- Name: user_login_info user_login_info_pkey; Type: CONSTRAINT; Schema: eg_public; Owner: eg_migrator
+--
+
+ALTER TABLE ONLY eg_public.user_login_info
+    ADD CONSTRAINT user_login_info_pkey PRIMARY KEY (user_id);
 
 
 --
@@ -179,6 +425,20 @@ ALTER TABLE ONLY eg_public."user"
 --
 
 CREATE INDEX class_teacher_id ON eg_public.class USING btree (teacher_id);
+
+
+--
+-- Name: user_login_info_email_idx; Type: INDEX; Schema: eg_public; Owner: eg_migrator
+--
+
+CREATE INDEX user_login_info_email_idx ON eg_public.user_login_info USING btree (email);
+
+
+--
+-- Name: login_flow _900_delete_expired; Type: TRIGGER; Schema: eg_private; Owner: eg_migrator
+--
+
+CREATE TRIGGER _900_delete_expired AFTER INSERT ON eg_private.login_flow FOR EACH STATEMENT EXECUTE FUNCTION eg_private.tg__login_flow__delete_expired();
 
 
 --
@@ -203,11 +463,51 @@ CREATE TRIGGER _501_teacher_correct_user_type_update BEFORE UPDATE ON eg_public.
 
 
 --
+-- Name: user_secrets user_secrets_user_id_fkey; Type: FK CONSTRAINT; Schema: eg_private; Owner: eg_migrator
+--
+
+ALTER TABLE ONLY eg_private.user_secrets
+    ADD CONSTRAINT user_secrets_user_id_fkey FOREIGN KEY (user_id) REFERENCES eg_public."user"(id) ON DELETE CASCADE;
+
+
+--
 -- Name: class class_teacher_id_fkey; Type: FK CONSTRAINT; Schema: eg_public; Owner: eg_migrator
 --
 
 ALTER TABLE ONLY eg_public.class
     ADD CONSTRAINT class_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES eg_public."user"(id);
+
+
+--
+-- Name: user user_id_login_info_fkey; Type: FK CONSTRAINT; Schema: eg_public; Owner: eg_migrator
+--
+
+ALTER TABLE ONLY eg_public."user"
+    ADD CONSTRAINT user_id_login_info_fkey FOREIGN KEY (id) REFERENCES eg_public.user_login_info(user_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: user user_id_secrets_fkey; Type: FK CONSTRAINT; Schema: eg_public; Owner: eg_migrator
+--
+
+ALTER TABLE ONLY eg_public."user"
+    ADD CONSTRAINT user_id_secrets_fkey FOREIGN KEY (id) REFERENCES eg_private.user_secrets(user_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: user_login_info user_login_info_user_id_email_fkey; Type: FK CONSTRAINT; Schema: eg_public; Owner: eg_migrator
+--
+
+ALTER TABLE ONLY eg_public.user_login_info
+    ADD CONSTRAINT user_login_info_user_id_email_fkey FOREIGN KEY (user_id, email) REFERENCES eg_public."user"(id, email) ON DELETE CASCADE;
+
+
+--
+-- Name: user_login_info user_login_info_user_id_fkey; Type: FK CONSTRAINT; Schema: eg_public; Owner: eg_migrator
+--
+
+ALTER TABLE ONLY eg_public.user_login_info
+    ADD CONSTRAINT user_login_info_user_id_fkey FOREIGN KEY (user_id) REFERENCES eg_public."user"(id) ON DELETE CASCADE;
 
 
 --
@@ -226,6 +526,46 @@ GRANT USAGE ON SCHEMA extensions TO eg_api;
 GRANT USAGE ON SCHEMA extensions TO eg_anon;
 GRANT USAGE ON SCHEMA extensions TO eg_student;
 GRANT USAGE ON SCHEMA extensions TO eg_teacher;
+
+
+--
+-- Name: FUNCTION retrieve_login_flow(login_flow_id uuid); Type: ACL; Schema: eg_public; Owner: eg_migrator
+--
+
+GRANT ALL ON FUNCTION eg_public.retrieve_login_flow(login_flow_id uuid) TO eg_student;
+GRANT ALL ON FUNCTION eg_public.retrieve_login_flow(login_flow_id uuid) TO eg_teacher;
+
+
+--
+-- Name: FUNCTION save_login_flow(serialized_server_state text); Type: ACL; Schema: eg_public; Owner: eg_migrator
+--
+
+GRANT ALL ON FUNCTION eg_public.save_login_flow(serialized_server_state text) TO eg_student;
+GRANT ALL ON FUNCTION eg_public.save_login_flow(serialized_server_state text) TO eg_teacher;
+
+
+--
+-- Name: FUNCTION sign_up(email extensions.citext, user_type eg_public.user_type, verifier text, salt text); Type: ACL; Schema: eg_public; Owner: eg_migrator
+--
+
+GRANT ALL ON FUNCTION eg_public.sign_up(email extensions.citext, user_type eg_public.user_type, verifier text, salt text) TO eg_student;
+GRANT ALL ON FUNCTION eg_public.sign_up(email extensions.citext, user_type eg_public.user_type, verifier text, salt text) TO eg_teacher;
+
+
+--
+-- Name: FUNCTION srp_creds_by_email(user_email extensions.citext); Type: ACL; Schema: eg_public; Owner: eg_migrator
+--
+
+GRANT ALL ON FUNCTION eg_public.srp_creds_by_email(user_email extensions.citext) TO eg_student;
+GRANT ALL ON FUNCTION eg_public.srp_creds_by_email(user_email extensions.citext) TO eg_teacher;
+
+
+--
+-- Name: FUNCTION user_login_salt(user_email extensions.citext); Type: ACL; Schema: eg_public; Owner: eg_migrator
+--
+
+GRANT ALL ON FUNCTION eg_public.user_login_salt(user_email extensions.citext) TO eg_student;
+GRANT ALL ON FUNCTION eg_public.user_login_salt(user_email extensions.citext) TO eg_teacher;
 
 
 --

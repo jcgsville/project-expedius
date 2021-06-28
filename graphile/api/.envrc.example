@@ -6,3 +6,8 @@ export DATABASE_URL="postgres://${API_ROLE}:${API_ROLE_PASSWORD}@localhost:5432/
 # This is the environment you're in.
 # Today, only development and production are supported
 export NODE_ENV=development
+
+# Use these env vars for yarn run bin:login
+export API_BASE_URL="http://localhost:13001"
+export LOGIN_USER_EMAIL="user@example.com"
+export LOGIN_USER_PASSWORD="verygoodpassword"
