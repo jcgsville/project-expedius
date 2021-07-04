@@ -8,23 +8,27 @@ import { generateSessionMiddleware } from './middleware/session-middleware'
 
 const port = portFromEnv('PORT', 13001)
 
-const pgPool = constructPgPool()
-const postgraphileDbSchemas = ['eg_public']
-const postgraphileMiddleware = postgraphile(
-    pgPool,
-    postgraphileDbSchemas,
-    generatePostgraphileOptions()
-)
+// const pgPool = constructPgPool()
+// const postgraphileDbSchemas = ['eg_public']
+// const postgraphileMiddleware = postgraphile(
+//     pgPool,
+//     postgraphileDbSchemas,
+//     generatePostgraphileOptions()
+// )
 
 const app = express()
-app.use(cookieParser())
-app.use(generateSessionMiddleware(pgPool))
-app.use(postgraphileMiddleware)
+// app.use(cookieParser())
+// app.use(generateSessionMiddleware(pgPool))
+// app.use(postgraphileMiddleware)
 
-if (envVarToBool('EXPORT_GQL_SCHEMA_ONLY')) {
-    console.log('Exporting the schema only. Returning before starting server.')
-    process.exit(0)
-}
+// if (envVarToBool('EXPORT_GQL_SCHEMA_ONLY')) {
+//     console.log('Exporting the schema only. Returning before starting server.')
+//     process.exit(0)
+// }
+
+app.use('/hello', (req, res) => {
+    res.send('Hello')
+})
 
 app.listen(port, () => {
     console.log(`Listening on ${port}`)
