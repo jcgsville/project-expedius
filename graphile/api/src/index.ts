@@ -1,8 +1,10 @@
 import express from 'express'
+import cookieParser from 'cookie-parser'
 import { postgraphile } from 'postgraphile'
 import { generatePostgraphileOptions } from './postgraphile-options'
 import { constructPgPool } from './utils/construct-pg-pool'
 import { envVarToBool, portFromEnv } from './utils/env-utils'
+import { generateSessionMiddleware } from './middleware/session-middleware'
 
 const port = portFromEnv('PORT', 13001)
 
@@ -15,6 +17,8 @@ const postgraphileMiddleware = postgraphile(
 )
 
 const app = express()
+app.use(cookieParser())
+app.use(generateSessionMiddleware(pgPool))
 app.use(postgraphileMiddleware)
 
 if (envVarToBool('EXPORT_GQL_SCHEMA_ONLY')) {

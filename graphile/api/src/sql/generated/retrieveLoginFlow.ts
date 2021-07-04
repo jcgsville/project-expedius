@@ -4,9 +4,9 @@ import { MissingValueError } from './common';
 
 export const argumentPattern = /(?<prefix>::?)(?<quote>['"]?)(?<key>[a-zA-Z0-9_]+)\k<quote>/g;
 export const rawQuery = `-- retrieveLoginFlow
-select eg_public.retrieve_login_flow(
+select * from eg_hidden.retrieve_login_flow(
     :'loginFlowId' :: uuid
-) as state;
+);
 `;
 
 export interface InputParameters {

@@ -1,4 +1,4 @@
 -- retrieveLoginFlow
-select eg_public.retrieve_login_flow(
+select * from eg_hidden.retrieve_login_flow(
     :'loginFlowId' :: uuid
-) as state;
+);

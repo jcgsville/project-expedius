@@ -1,2 +1,2 @@
 -- selectSrpCredsByEmail
-select * from eg_public.srp_creds_by_email(:'email' :: citext);
+select * from eg_hidden.srp_creds_by_email(:'email' :: citext);

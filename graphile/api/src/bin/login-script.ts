@@ -92,7 +92,9 @@ const login = async (
             completeSrpLogin: { serverProof },
         },
     } = completeResult
-
+    if (!serverProof) {
+        throw new Error('Password invalid')
+    }
     if (!srpClient.validateProof(Buffer.from(serverProof, 'base64'))) {
         throw new Error('Server proof invalid')
     }

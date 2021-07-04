@@ -17,6 +17,15 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
+-- Name: eg_hidden; Type: SCHEMA; Schema: -; Owner: eg_migrator
+--
+
+CREATE SCHEMA eg_hidden;
+
+
+ALTER SCHEMA eg_hidden OWNER TO eg_migrator;
+
+--
 -- Name: eg_private; Type: SCHEMA; Schema: -; Owner: eg_migrator
 --
 
@@ -72,6 +81,19 @@ COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UU
 
 
 --
+-- Name: srp_creds; Type: TYPE; Schema: eg_hidden; Owner: eg_migrator
+--
+
+CREATE TYPE eg_hidden.srp_creds AS (
+	id uuid,
+	salt text,
+	verifier text
+);
+
+
+ALTER TYPE eg_hidden.srp_creds OWNER TO eg_migrator;
+
+--
 -- Name: sign_up_result; Type: TYPE; Schema: eg_public; Owner: eg_migrator
 --
 
@@ -84,18 +106,6 @@ CREATE TYPE eg_public.sign_up_result AS ENUM (
 ALTER TYPE eg_public.sign_up_result OWNER TO eg_migrator;
 
 --
--- Name: srp_creds; Type: TYPE; Schema: eg_public; Owner: eg_migrator
---
-
-CREATE TYPE eg_public.srp_creds AS (
-	salt text,
-	verifier text
-);
-
-
-ALTER TYPE eg_public.srp_creds OWNER TO eg_migrator;
-
---
 -- Name: user_type; Type: TYPE; Schema: eg_public; Owner: eg_migrator
 --
 
@@ -106,6 +116,138 @@ CREATE TYPE eg_public.user_type AS ENUM (
 
 
 ALTER TYPE eg_public.user_type OWNER TO eg_migrator;
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: session; Type: TABLE; Schema: eg_private; Owner: eg_migrator
+--
+
+CREATE TABLE eg_private.session (
+    id text NOT NULL,
+    user_id uuid NOT NULL,
+    expires_at timestamp with time zone NOT NULL
+);
+
+
+ALTER TABLE eg_private.session OWNER TO eg_migrator;
+
+--
+-- Name: initiate_session(text, uuid); Type: FUNCTION; Schema: eg_hidden; Owner: eg_migrator
+--
+
+CREATE FUNCTION eg_hidden.initiate_session(session_id text, user_id uuid) RETURNS eg_private.session
+    LANGUAGE sql STRICT SECURITY DEFINER
+    SET search_path TO 'extensions'
+    AS $$
+    insert into eg_private.session (
+        id,
+        user_id,
+        expires_at
+    ) values (
+        session_id,
+        user_id,
+        now() + interval '30 days'
+    ) returning *;
+$$;
+
+
+ALTER FUNCTION eg_hidden.initiate_session(session_id text, user_id uuid) OWNER TO eg_migrator;
+
+--
+-- Name: login_flow; Type: TABLE; Schema: eg_private; Owner: eg_migrator
+--
+
+CREATE TABLE eg_private.login_flow (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    serialized_server_state text NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    user_id uuid NOT NULL
+);
+
+
+ALTER TABLE eg_private.login_flow OWNER TO eg_migrator;
+
+--
+-- Name: retrieve_login_flow(uuid); Type: FUNCTION; Schema: eg_hidden; Owner: eg_migrator
+--
+
+CREATE FUNCTION eg_hidden.retrieve_login_flow(login_flow_id uuid) RETURNS eg_private.login_flow
+    LANGUAGE sql STABLE STRICT SECURITY DEFINER
+    SET search_path TO 'extensions'
+    AS $$
+    select *
+    from eg_private.login_flow
+    where id = login_flow_id
+        and now() < expires_at;
+$$;
+
+
+ALTER FUNCTION eg_hidden.retrieve_login_flow(login_flow_id uuid) OWNER TO eg_migrator;
+
+--
+-- Name: save_login_flow(uuid, text); Type: FUNCTION; Schema: eg_hidden; Owner: eg_migrator
+--
+
+CREATE FUNCTION eg_hidden.save_login_flow(user_id uuid, serialized_server_state text) RETURNS uuid
+    LANGUAGE sql STRICT SECURITY DEFINER
+    SET search_path TO 'extensions'
+    AS $$
+    insert into eg_private.login_flow(
+        serialized_server_state,
+        expires_at,
+        user_id
+    ) values (
+        serialized_server_state,
+        now() + interval '1 minute',
+        user_id
+    ) returning id;
+$$;
+
+
+ALTER FUNCTION eg_hidden.save_login_flow(user_id uuid, serialized_server_state text) OWNER TO eg_migrator;
+
+--
+-- Name: srp_creds_by_email(extensions.citext); Type: FUNCTION; Schema: eg_hidden; Owner: eg_migrator
+--
+
+CREATE FUNCTION eg_hidden.srp_creds_by_email(user_email extensions.citext) RETURNS eg_hidden.srp_creds
+    LANGUAGE sql STRICT SECURITY DEFINER
+    SET search_path TO 'extensions'
+    AS $$
+    select
+        u.id,
+        uli.salt,
+        us.verifier
+    from eg_public.user u
+    join eg_public.user_login_info uli on u.id = uli.user_id
+    join eg_private.user_secrets us on u.id = us.user_id
+    where u.email = user_email;
+$$;
+
+
+ALTER FUNCTION eg_hidden.srp_creds_by_email(user_email extensions.citext) OWNER TO eg_migrator;
+
+--
+-- Name: user_id_by_session_id(text); Type: FUNCTION; Schema: eg_hidden; Owner: eg_migrator
+--
+
+CREATE FUNCTION eg_hidden.user_id_by_session_id(session_id text) RETURNS uuid
+    LANGUAGE sql STABLE STRICT SECURITY DEFINER
+    SET search_path TO 'extensions'
+    AS $$
+    select
+        u.id
+    from eg_private.session s
+    join eg_public.user u on u.id = s.user_id
+    where s.id = session_id
+        and s.expires_at > now();
+$$;
+
+
+ALTER FUNCTION eg_hidden.user_id_by_session_id(session_id text) OWNER TO eg_migrator;
 
 --
 -- Name: tg__class__teacher_correct_user_type(); Type: FUNCTION; Schema: eg_private; Owner: eg_migrator
@@ -168,43 +310,6 @@ $$;
 ALTER FUNCTION eg_private.tg__user__type_uneditable() OWNER TO eg_migrator;
 
 --
--- Name: retrieve_login_flow(uuid); Type: FUNCTION; Schema: eg_public; Owner: eg_migrator
---
-
-CREATE FUNCTION eg_public.retrieve_login_flow(login_flow_id uuid) RETURNS text
-    LANGUAGE sql STABLE STRICT SECURITY DEFINER
-    SET search_path TO 'extensions'
-    AS $$
-    select serialized_server_state
-    from eg_private.login_flow
-    where id = login_flow_id
-        and now() < expires_at;
-$$;
-
-
-ALTER FUNCTION eg_public.retrieve_login_flow(login_flow_id uuid) OWNER TO eg_migrator;
-
---
--- Name: save_login_flow(text); Type: FUNCTION; Schema: eg_public; Owner: eg_migrator
---
-
-CREATE FUNCTION eg_public.save_login_flow(serialized_server_state text) RETURNS uuid
-    LANGUAGE sql STRICT SECURITY DEFINER
-    SET search_path TO 'extensions'
-    AS $$
-    insert into eg_private.login_flow(
-        serialized_server_state,
-        expires_at
-    ) values (
-        serialized_server_state,
-        now() + interval '1 minute'
-    ) returning id;
-$$;
-
-
-ALTER FUNCTION eg_public.save_login_flow(serialized_server_state text) OWNER TO eg_migrator;
-
---
 -- Name: sign_up(extensions.citext, eg_public.user_type, text, text); Type: FUNCTION; Schema: eg_public; Owner: eg_migrator
 --
 
@@ -258,26 +363,6 @@ $$;
 ALTER FUNCTION eg_public.sign_up(email extensions.citext, user_type eg_public.user_type, verifier text, salt text) OWNER TO eg_migrator;
 
 --
--- Name: srp_creds_by_email(extensions.citext); Type: FUNCTION; Schema: eg_public; Owner: eg_migrator
---
-
-CREATE FUNCTION eg_public.srp_creds_by_email(user_email extensions.citext) RETURNS eg_public.srp_creds
-    LANGUAGE sql STRICT SECURITY DEFINER
-    SET search_path TO 'extensions'
-    AS $$
-    select
-        uli.salt,
-        us.verifier
-    from eg_public.user u
-    join eg_public.user_login_info uli on u.id = uli.user_id
-    join eg_private.user_secrets us on u.id = us.user_id
-    where u.email = user_email;
-$$;
-
-
-ALTER FUNCTION eg_public.srp_creds_by_email(user_email extensions.citext) OWNER TO eg_migrator;
-
---
 -- Name: user_login_salt(extensions.citext); Type: FUNCTION; Schema: eg_public; Owner: eg_migrator
 --
 
@@ -291,23 +376,6 @@ $$;
 
 
 ALTER FUNCTION eg_public.user_login_salt(user_email extensions.citext) OWNER TO eg_migrator;
-
-SET default_tablespace = '';
-
-SET default_table_access_method = heap;
-
---
--- Name: login_flow; Type: TABLE; Schema: eg_private; Owner: eg_migrator
---
-
-CREATE TABLE eg_private.login_flow (
-    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
-    serialized_server_state text NOT NULL,
-    expires_at timestamp with time zone NOT NULL
-);
-
-
-ALTER TABLE eg_private.login_flow OWNER TO eg_migrator;
 
 --
 -- Name: user_secrets; Type: TABLE; Schema: eg_private; Owner: eg_migrator
@@ -373,6 +441,14 @@ ALTER TABLE ONLY eg_private.login_flow
 
 
 --
+-- Name: session session_pkey; Type: CONSTRAINT; Schema: eg_private; Owner: eg_migrator
+--
+
+ALTER TABLE ONLY eg_private.session
+    ADD CONSTRAINT session_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: user_secrets user_secrets_pkey; Type: CONSTRAINT; Schema: eg_private; Owner: eg_migrator
 --
 
@@ -421,6 +497,20 @@ ALTER TABLE ONLY eg_public."user"
 
 
 --
+-- Name: login_flow_user_id_idx; Type: INDEX; Schema: eg_private; Owner: eg_migrator
+--
+
+CREATE INDEX login_flow_user_id_idx ON eg_private.login_flow USING btree (user_id);
+
+
+--
+-- Name: session_user_id_idx; Type: INDEX; Schema: eg_private; Owner: eg_migrator
+--
+
+CREATE INDEX session_user_id_idx ON eg_private.session USING btree (user_id);
+
+
+--
 -- Name: class_teacher_id; Type: INDEX; Schema: eg_public; Owner: eg_migrator
 --
 
@@ -460,6 +550,22 @@ CREATE TRIGGER _500_user_type_uneditable BEFORE UPDATE ON eg_public."user" FOR E
 --
 
 CREATE TRIGGER _501_teacher_correct_user_type_update BEFORE UPDATE ON eg_public.class FOR EACH ROW WHEN ((old.teacher_id IS DISTINCT FROM new.teacher_id)) EXECUTE FUNCTION eg_private.tg__class__teacher_correct_user_type();
+
+
+--
+-- Name: login_flow login_flow_user_id_fkey; Type: FK CONSTRAINT; Schema: eg_private; Owner: eg_migrator
+--
+
+ALTER TABLE ONLY eg_private.login_flow
+    ADD CONSTRAINT login_flow_user_id_fkey FOREIGN KEY (user_id) REFERENCES eg_public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: session session_user_id_fkey; Type: FK CONSTRAINT; Schema: eg_private; Owner: eg_migrator
+--
+
+ALTER TABLE ONLY eg_private.session
+    ADD CONSTRAINT session_user_id_fkey FOREIGN KEY (user_id) REFERENCES eg_public."user"(id) ON DELETE CASCADE;
 
 
 --
@@ -529,35 +635,11 @@ GRANT USAGE ON SCHEMA extensions TO eg_teacher;
 
 
 --
--- Name: FUNCTION retrieve_login_flow(login_flow_id uuid); Type: ACL; Schema: eg_public; Owner: eg_migrator
---
-
-GRANT ALL ON FUNCTION eg_public.retrieve_login_flow(login_flow_id uuid) TO eg_student;
-GRANT ALL ON FUNCTION eg_public.retrieve_login_flow(login_flow_id uuid) TO eg_teacher;
-
-
---
--- Name: FUNCTION save_login_flow(serialized_server_state text); Type: ACL; Schema: eg_public; Owner: eg_migrator
---
-
-GRANT ALL ON FUNCTION eg_public.save_login_flow(serialized_server_state text) TO eg_student;
-GRANT ALL ON FUNCTION eg_public.save_login_flow(serialized_server_state text) TO eg_teacher;
-
-
---
 -- Name: FUNCTION sign_up(email extensions.citext, user_type eg_public.user_type, verifier text, salt text); Type: ACL; Schema: eg_public; Owner: eg_migrator
 --
 
 GRANT ALL ON FUNCTION eg_public.sign_up(email extensions.citext, user_type eg_public.user_type, verifier text, salt text) TO eg_student;
 GRANT ALL ON FUNCTION eg_public.sign_up(email extensions.citext, user_type eg_public.user_type, verifier text, salt text) TO eg_teacher;
-
-
---
--- Name: FUNCTION srp_creds_by_email(user_email extensions.citext); Type: ACL; Schema: eg_public; Owner: eg_migrator
---
-
-GRANT ALL ON FUNCTION eg_public.srp_creds_by_email(user_email extensions.citext) TO eg_student;
-GRANT ALL ON FUNCTION eg_public.srp_creds_by_email(user_email extensions.citext) TO eg_teacher;
 
 
 --

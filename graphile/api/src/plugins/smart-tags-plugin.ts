@@ -63,22 +63,6 @@ export const SmartTagsPlugin = makeJSONPgSmartTagsPlugin({
                 },
             },
         },
-        procedure: {
-            'eg_public.save_login_flow': {
-                tags: {
-                    omit: true,
-                },
-            },
-            'eg_public.retrieve_login_flow': {
-                tags: {
-                    omit: true,
-                },
-            },
-            'eg_public.srp_creds_by_email': {
-                tags: {
-                    omit: true,
-                },
-            },
-        },
+        procedure: {},
     },
 })

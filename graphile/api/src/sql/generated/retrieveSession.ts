@@ -3,16 +3,12 @@ import { QueryConfig as PgQuery } from 'pg';
 import { MissingValueError } from './common';
 
 export const argumentPattern = /(?<prefix>::?)(?<quote>['"]?)(?<key>[a-zA-Z0-9_]+)\k<quote>/g;
-export const rawQuery = `-- saveLoginFlow
-select eg_hidden.save_login_flow(
-    :'userId' :: uuid,
-    :'serializedServerState' :: text
-) as id;
+export const rawQuery = `-- retrieveSession
+select eg_hidden.user_id_by_session_id(:'sessionId' :: text) as id;
 `;
 
 export interface InputParameters {
-    userId: any;
-    serializedServerState: any;
+    sessionId: any;
 }
 
 export default function generateQuery(
@@ -38,6 +34,6 @@ export default function generateQuery(
     return {
         text,
         values,
-        name: 'saveLoginFlow'
+        name: 'retrieveSession'
     };
 }

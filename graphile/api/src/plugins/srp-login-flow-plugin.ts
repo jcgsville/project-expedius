@@ -1,12 +1,15 @@
+/* eslint-disable max-lines-per-function */
 import { gql, makeExtendSchemaPlugin } from 'graphile-utils'
-import { Client } from 'pg'
 import { SRPServer } from 'srp6a'
 import {
+    initiateSession,
     retrieveLoginFlow,
     saveLoginFlow,
     selectSrpCredsByEmail,
 } from '../sql/generated'
-import { PgNotFoundError, queryOne } from '../utils/pg-query-utils'
+import { queryOne } from '../utils/pg-query-utils'
+
+let srpServer: SRPServer
 
 export const SrpLoginFlowPlugin = makeExtendSchemaPlugin(() => ({
     typeDefs: gql`
@@ -51,22 +54,15 @@ export const SrpLoginFlowPlugin = makeExtendSchemaPlugin(() => ({
         Mutation: {
             initiateSrpLogin: async (_mutation, args, context) => {
                 const { email, clientPublicKey } = args.input
-                let verifier: string
-                let salt: string
-                try {
-                    // eslint-disable-next-line no-extra-semi
-                    ;({ verifier, salt } = await queryOne(
-                        context.pgClient,
-                        selectSrpCredsByEmail({ email })
-                    ))
-                } catch (error) {
-                    if (error instanceof PgNotFoundError) {
-                        return {}
-                    }
-                    throw error
+                const { rows } = await context.pgClient.query(
+                    selectSrpCredsByEmail({ email })
+                )
+                if (rows.length !== 1) {
+                    return {}
                 }
+                const { id: userId, verifier, salt } = rows[0]
 
-                const srpServer = new SRPServer('default')
+                srpServer = new SRPServer('default')
                 if (
                     !srpServer.setCredentials(
                         email,
@@ -85,10 +81,12 @@ export const SrpLoginFlowPlugin = makeExtendSchemaPlugin(() => ({
                     throw new Error('Failed to set SRP client key')
                 }
 
-                const loginFlowId = await saveSrpServerState(
+                const serializedServerState = serializeSrpServer(srpServer)
+                const { id: loginFlowId } = await queryOne(
                     context.pgClient,
-                    srpServer
+                    saveLoginFlow({ userId, serializedServerState })
                 )
+
                 return {
                     loginFlowId,
                     serverPublicKey: srpServer.publicKey.toString('base64'),
@@ -96,15 +94,31 @@ export const SrpLoginFlowPlugin = makeExtendSchemaPlugin(() => ({
             },
             completeSrpLogin: async (_mutation, args, context) => {
                 const { loginFlowId, clientProof } = args.input
-                const server = await retrieveSrpServerState(
-                    context.pgClient,
-                    loginFlowId
+                const { rows } = await context.pgClient.query(
+                    retrieveLoginFlow({ loginFlowId })
                 )
-                if (!server.validateProof(Buffer.from(clientProof, 'base64'))) {
+                if (rows.length !== 1) {
+                    throw new Error(
+                        'Login flow with ID is not present or has expired.'
+                    )
+                }
+                const {
+                    serialized_server_state: serializedServerState,
+                    user_id: userId,
+                } = rows[0]
+                const srpServer = deserializeSrpServer(serializedServerState)
+                if (
+                    !srpServer.validateProof(Buffer.from(clientProof, 'base64'))
+                ) {
                     return {}
                 }
+                const sessionId = srpServer.sessionKey.toString('base64')
+                await queryOne(
+                    context.pgClient,
+                    initiateSession({ sessionId, userId })
+                )
                 return {
-                    serverProof: server.proof.toString('base64'),
+                    serverProof: srpServer.proof.toString('base64'),
                 }
             },
         },
@@ -116,11 +130,8 @@ export const SrpLoginFlowPlugin = makeExtendSchemaPlugin(() => ({
 // to the library
 // ======================
 
-const saveSrpServerState = async (
-    pgClient: Client,
-    srpServer: SRPServer
-): Promise<string> => {
-    const serializedServerState = Buffer.from(
+const serializeSrpServer = (srpServer: SRPServer): string => {
+    return Buffer.from(
         JSON.stringify({
             /* eslint-disable @typescript-eslint/ban-ts-comment */
             // @ts-ignore
@@ -150,24 +161,9 @@ const saveSrpServerState = async (
             /* eslint-enable @typescript-eslint/ban-ts-comment */
         })
     ).toString('base64')
-    const { id } = await queryOne(
-        pgClient,
-        saveLoginFlow({ serializedServerState })
-    )
-    return id
 }
 
-const retrieveSrpServerState = async (
-    pgClient: Client,
-    loginFlowId: string
-): Promise<SRPServer> => {
-    const { state: serializedServerState } = await queryOne(
-        pgClient,
-        retrieveLoginFlow({ loginFlowId })
-    )
-    if (!serializedServerState) {
-        throw new Error('Login flow with ID is not present or has expired.')
-    }
+const deserializeSrpServer = (serializedServerState: string): SRPServer => {
     const deserializedState = JSON.parse(
         Buffer.from(serializedServerState, 'base64').toString()
     )

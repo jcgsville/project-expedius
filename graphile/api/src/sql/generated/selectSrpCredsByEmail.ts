@@ -4,7 +4,7 @@ import { MissingValueError } from './common';
 
 export const argumentPattern = /(?<prefix>::?)(?<quote>['"]?)(?<key>[a-zA-Z0-9_]+)\k<quote>/g;
 export const rawQuery = `-- selectSrpCredsByEmail
-select * from eg_public.srp_creds_by_email(:'email' :: citext);
+select * from eg_hidden.srp_creds_by_email(:'email' :: citext);
 `;
 
 export interface InputParameters {
