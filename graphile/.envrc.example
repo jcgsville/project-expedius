@@ -1,0 +1,3 @@
+# This makes tfenv use version 1.0.1 when in this directory.
+# Outside this directory it uses whatever is set as your tfenv default
+export TFENV_TERRAFORM_VERSION=1.0.1
