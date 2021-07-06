@@ -117,6 +117,19 @@ CREATE TYPE eg_public.user_type AS ENUM (
 
 ALTER TYPE eg_public.user_type OWNER TO eg_migrator;
 
+--
+-- Name: current_user_id(); Type: FUNCTION; Schema: eg_hidden; Owner: eg_migrator
+--
+
+CREATE FUNCTION eg_hidden.current_user_id() RETURNS uuid
+    LANGUAGE sql STABLE
+    AS $$
+    select nullif(current_setting('user.id', true), '') :: uuid;
+$$;
+
+
+ALTER FUNCTION eg_hidden.current_user_id() OWNER TO eg_migrator;
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
@@ -231,23 +244,38 @@ $$;
 ALTER FUNCTION eg_hidden.srp_creds_by_email(user_email extensions.citext) OWNER TO eg_migrator;
 
 --
--- Name: user_id_by_session_id(text); Type: FUNCTION; Schema: eg_hidden; Owner: eg_migrator
+-- Name: user; Type: TABLE; Schema: eg_public; Owner: eg_migrator
 --
 
-CREATE FUNCTION eg_hidden.user_id_by_session_id(session_id text) RETURNS uuid
+CREATE TABLE eg_public."user" (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    email extensions.citext NOT NULL,
+    name text NOT NULL,
+    user_type eg_public.user_type NOT NULL,
+    CONSTRAINT user_email_check CHECK ((email OPERATOR(extensions.~) '^.+@.+\..+$'::extensions.citext)),
+    CONSTRAINT user_name_check CHECK ((length(name) > 1))
+);
+
+
+ALTER TABLE eg_public."user" OWNER TO eg_migrator;
+
+--
+-- Name: user_by_session_id(text); Type: FUNCTION; Schema: eg_hidden; Owner: eg_migrator
+--
+
+CREATE FUNCTION eg_hidden.user_by_session_id(session_id text) RETURNS eg_public."user"
     LANGUAGE sql STABLE STRICT SECURITY DEFINER
     SET search_path TO 'extensions'
     AS $$
-    select
-        u.id
+    select u.*
     from eg_private.session s
-    join eg_public.user u on u.id = s.user_id
-    where s.id = session_id
-        and s.expires_at > now();
+    join eg_public.user u
+        on u.id = s.user_id
+    where s.id = session_id;
 $$;
 
 
-ALTER FUNCTION eg_hidden.user_id_by_session_id(session_id text) OWNER TO eg_migrator;
+ALTER FUNCTION eg_hidden.user_by_session_id(session_id text) OWNER TO eg_migrator;
 
 --
 -- Name: tg__class__teacher_correct_user_type(); Type: FUNCTION; Schema: eg_private; Owner: eg_migrator
@@ -378,6 +406,21 @@ $$;
 ALTER FUNCTION eg_public.user_login_salt(user_email extensions.citext) OWNER TO eg_migrator;
 
 --
+-- Name: viewer(); Type: FUNCTION; Schema: eg_public; Owner: eg_migrator
+--
+
+CREATE FUNCTION eg_public.viewer() RETURNS eg_public."user"
+    LANGUAGE sql STABLE
+    AS $$
+    select *
+    from eg_public.user
+    where id = eg_hidden.current_user_id();
+$$;
+
+
+ALTER FUNCTION eg_public.viewer() OWNER TO eg_migrator;
+
+--
 -- Name: user_secrets; Type: TABLE; Schema: eg_private; Owner: eg_migrator
 --
 
@@ -402,22 +445,6 @@ CREATE TABLE eg_public.class (
 
 
 ALTER TABLE eg_public.class OWNER TO eg_migrator;
-
---
--- Name: user; Type: TABLE; Schema: eg_public; Owner: eg_migrator
---
-
-CREATE TABLE eg_public."user" (
-    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
-    email extensions.citext NOT NULL,
-    name text NOT NULL,
-    user_type eg_public.user_type NOT NULL,
-    CONSTRAINT user_email_check CHECK ((email OPERATOR(extensions.~) '^.+@.+\..+$'::extensions.citext)),
-    CONSTRAINT user_name_check CHECK ((length(name) > 1))
-);
-
-
-ALTER TABLE eg_public."user" OWNER TO eg_migrator;
 
 --
 -- Name: user_login_info; Type: TABLE; Schema: eg_public; Owner: eg_migrator
@@ -617,6 +644,16 @@ ALTER TABLE ONLY eg_public.user_login_info
 
 
 --
+-- Name: SCHEMA eg_hidden; Type: ACL; Schema: -; Owner: eg_migrator
+--
+
+GRANT USAGE ON SCHEMA eg_hidden TO eg_api;
+GRANT USAGE ON SCHEMA eg_hidden TO eg_student;
+GRANT USAGE ON SCHEMA eg_hidden TO eg_teacher;
+GRANT USAGE ON SCHEMA eg_hidden TO eg_anon;
+
+
+--
 -- Name: SCHEMA eg_public; Type: ACL; Schema: -; Owner: eg_migrator
 --
 
@@ -635,6 +672,14 @@ GRANT USAGE ON SCHEMA extensions TO eg_teacher;
 
 
 --
+-- Name: TABLE "user"; Type: ACL; Schema: eg_public; Owner: eg_migrator
+--
+
+GRANT SELECT ON TABLE eg_public."user" TO eg_student;
+GRANT SELECT ON TABLE eg_public."user" TO eg_teacher;
+
+
+--
 -- Name: FUNCTION sign_up(email extensions.citext, user_type eg_public.user_type, verifier text, salt text); Type: ACL; Schema: eg_public; Owner: eg_migrator
 --
 
@@ -648,6 +693,14 @@ GRANT ALL ON FUNCTION eg_public.sign_up(email extensions.citext, user_type eg_pu
 
 GRANT ALL ON FUNCTION eg_public.user_login_salt(user_email extensions.citext) TO eg_student;
 GRANT ALL ON FUNCTION eg_public.user_login_salt(user_email extensions.citext) TO eg_teacher;
+
+
+--
+-- Name: FUNCTION viewer(); Type: ACL; Schema: eg_public; Owner: eg_migrator
+--
+
+GRANT ALL ON FUNCTION eg_public.viewer() TO eg_student;
+GRANT ALL ON FUNCTION eg_public.viewer() TO eg_teacher;
 
 
 --

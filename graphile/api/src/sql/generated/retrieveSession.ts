@@ -4,7 +4,7 @@ import { MissingValueError } from './common';
 
 export const argumentPattern = /(?<prefix>::?)(?<quote>['"]?)(?<key>[a-zA-Z0-9_]+)\k<quote>/g;
 export const rawQuery = `-- retrieveSession
-select eg_hidden.user_id_by_session_id(:'sessionId' :: text) as id;
+select (eg_hidden.user_by_session_id(:'sessionId' :: text)).*;
 `;
 
 export interface InputParameters {

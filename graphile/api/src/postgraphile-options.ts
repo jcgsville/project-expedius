@@ -6,6 +6,7 @@ import { NodePlugin } from 'graphile-build'
 import PgSimplifyInflectorPlugin from '@graphile-contrib/pg-simplify-inflector'
 import { RemoveRootQueryPlugin } from './plugins/remove-root-query-plugin'
 import { SrpLoginFlowPlugin } from './plugins/srp-login-flow-plugin'
+import { AuthenticatedRequest } from './types/AuthenticedRequest'
 
 export const generatePostgraphileOptions = (): PostGraphileOptions => {
     const isDev = requireNodeEnv() === EnvironmentName.DEV
@@ -26,5 +27,9 @@ export const generatePostgraphileOptions = (): PostGraphileOptions => {
             SmartTagsPlugin,
             SrpLoginFlowPlugin,
         ],
+        pgSettings: (req: AuthenticatedRequest) => ({
+            'user.id': req.userId || null,
+            role: req.userRole,
+        }),
     }
 }

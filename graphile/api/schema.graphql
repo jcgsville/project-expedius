@@ -3,6 +3,7 @@ type Query {
   class(id: UUID!): Class
   user(id: UUID!): User
   userLoginSalt(userEmail: String): String
+  viewer: User
 }
 
 type Class {

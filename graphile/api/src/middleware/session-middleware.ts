@@ -1,42 +1,60 @@
-import { RequestHandler } from 'express'
+import { RequestHandler, Response, NextFunction } from 'express'
 import { Pool } from 'pg'
 import { retrieveSession } from '../sql/generated'
+import { AuthenticatedRequest } from '../types/AuthenticedRequest'
+import { EgUserRole } from '../types/EgUserRole'
+import { UserType } from '../types/UserType'
 import { queryOne } from '../utils/pg-query-utils'
 import { withPgClient } from '../utils/with-pg-client'
 
 const SESSION_HEADER_REGEXP = /Session (?<sessionId>.+)/
 
-// TODO: tweak the types to be able to remove the ts-ignore
-
 export const generateSessionMiddleware = (pgPool: Pool): RequestHandler => {
-    const middleware: RequestHandler = (req, res, next) => {
+    return (
+        req: AuthenticatedRequest,
+        res: Response,
+        next: NextFunction
+    ): void => {
         const sessionId =
             req.cookies.Session ||
             sessionIdAuthHeader(req.headers.authorization)
         if (sessionId) {
             withPgClient(pgPool, async pgClient =>
                 queryOne(pgClient, retrieveSession({ sessionId }))
-            ).then(({ id }) => {
-                if (id) {
-                    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                    // @ts-ignore
+            ).then(({ id, user_type: userType }) => {
+                if (id && userType) {
                     req.userId = id
+                    req.userRole = roleForUserType(userType)
                     next()
                 } else {
                     res.sendStatus(401)
                 }
             })
         } else {
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-ignore
-            req.userId = null
             next()
         }
     }
-    return middleware
 }
 
 const sessionIdAuthHeader = (
     authorizationHeader: string | undefined
 ): string | undefined =>
     authorizationHeader?.match(SESSION_HEADER_REGEXP)?.groups?.sessionId
+
+const roleForUserType = (userType: UserType): EgUserRole => {
+    switch (userType) {
+        case 'STUDENT':
+            return 'eg_student'
+        case 'TEACHER':
+            return 'eg_teacher'
+        default:
+            assertExhaustiveRoleType(userType)
+    }
+}
+
+// Functions for exhaustive enum checking seem to not work
+// with arrow functions
+// eslint-disable-next-line prefer-arrow/prefer-arrow-functions
+function assertExhaustiveRoleType(userType: never): never {
+    throw new Error(`Did not handle user type: ${userType}`)
+}
