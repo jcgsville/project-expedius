@@ -2024,6 +2024,11 @@ pgpass@1.x:
   dependencies:
     split2 "^3.1.1"
 
+pgrita@^1.1.2:
+  version "1.1.2"
+  resolved "https://registry.yarnpkg.com/pgrita/-/pgrita-1.1.2.tgz#7f6cce7648c119ce7e17590c938daa353d39777c"
+  integrity sha512-bWPBO+3HhqRKIN5jK5LEI1Pba7RezAqmC/+AvWbLTQf610fXyvHUShXlsjSin7JSiArkBUBabDgRWqPjXTvyag==
+
 picomatch@^2.0.4, picomatch@^2.2.1, picomatch@^2.2.3:
   version "2.2.3"
   resolved "https://registry.yarnpkg.com/picomatch/-/picomatch-2.2.3.tgz#465547f359ccc206d3c48e46a1bcb89bf7ee619d"

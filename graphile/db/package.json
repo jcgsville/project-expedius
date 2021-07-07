@@ -3,7 +3,11 @@
     "version": "1.0.0",
     "description": "Project expedius using the graphile suite - the DB migration tooling",
     "license": "MIT",
+    "scripts": {
+        "pgrita": "pgrita --token ${PG_RITA_TOKEN:?} --project expedius/expedius-graphile --connection ${DATABASE_URL:?}"
+    },
     "dependencies": {
-        "graphile-migrate": "^1.0.2"
+        "graphile-migrate": "^1.0.2",
+        "pgrita": "^1.1.2"
     }
 }
