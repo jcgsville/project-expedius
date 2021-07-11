@@ -7,24 +7,7 @@ export const SmartTagsPlugin = makeJSONPgSmartTagsPlugin({
         class: {
             'eg_public.user': {
                 tags: {
-                    omit: 'all,create,many',
-                },
-                attribute: {
-                    id: {
-                        tags: {
-                            omit: 'update',
-                        },
-                    },
-                    email: {
-                        tags: {
-                            omit: 'update',
-                        },
-                    },
-                    user_type: {
-                        tags: {
-                            omit: 'update',
-                        },
-                    },
+                    omit: 'all,create,update,many',
                 },
                 constraint: {
                     user_email_key: {
