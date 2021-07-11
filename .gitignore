@@ -1,5 +1,6 @@
 .envrc
 graphile/db/migrations/current.sql
+.build
 
 #### Everything below was copied from https://github.com/github/gitignore/blob/master/Node.gitignore
 
