@@ -14,9 +14,7 @@
     "dependencies": {
         "graphile-migrate": "^1.0.2",
         "pg-format": "^1.0.4",
-        "pgrita": "^1.1.2",
-        "yargs": "^17.0.1",
-        "yargs-interactive": "^3.0.0"
+        "pgrita": "^1.1.2"
     },
     "devDependencies": {
         "@types/pg-format": "^1.0.2",

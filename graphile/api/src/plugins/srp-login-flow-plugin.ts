@@ -54,7 +54,7 @@ export const SrpLoginFlowPlugin = makeExtendSchemaPlugin(() => ({
     resolvers: {
         Mutation: {
             initiateSrpLogin: async (_mutation, args, context) => {
-                if (context.userRole !== EgUserRole.ANON) {
+                if (context.pgRole !== EgUserRole.ANON) {
                     throw new Error('Cannot login while in existing session.')
                 }
                 const { email, clientPublicKey } = args.input
@@ -97,7 +97,7 @@ export const SrpLoginFlowPlugin = makeExtendSchemaPlugin(() => ({
                 }
             },
             completeSrpLogin: async (_mutation, args, context) => {
-                if (context.userRole !== EgUserRole.ANON) {
+                if (context.pgRole !== EgUserRole.ANON) {
                     throw new Error('Cannot login while in existing session.')
                 }
                 const { loginFlowId, clientProof } = args.input

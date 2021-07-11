@@ -19,6 +19,9 @@ import { EgUserRole } from '~common/models/EgUserRole'
 const EXTENSIONS_SCHEMA_NAME = 'extensions'
 
 const YARGS_OPTIONS: Option = {
+    interactive: {
+        default: true,
+    },
     databaseUrl: {
         type: 'input',
         describe: 'Super user connection string used to initialize DB',

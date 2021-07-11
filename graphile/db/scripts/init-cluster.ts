@@ -8,6 +8,9 @@ import { requireEnvVar } from '~common/utils/env-utils'
 // queries require super user access. Script is idempotent.
 
 const YARGS_OPTIONS: Option = {
+    interactive: {
+        default: true,
+    },
     dev: {
         type: 'checkbox',
         describe: 'Whether or not this is a development environment',

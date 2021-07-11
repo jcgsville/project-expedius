@@ -15,6 +15,8 @@
         "prettier": "^2.2.1",
         "ts-node": "^10.0.0",
         "tsconfig-paths": "^3.10.1",
-        "typescript": "^4.3.5"
+        "typescript": "^4.3.5",
+        "yargs": "^17.0.1",
+        "yargs-interactive": "^3.0.0"
     }
 }
