@@ -2,7 +2,7 @@
 type Query {
   class(id: UUID!): Class
   user(id: UUID!): User
-  userLoginSalt(userEmail: String): String
+  userLoginSalt(userEmail: String!): String
   viewer: User
 }
 
@@ -23,8 +23,8 @@ scalar UUID
 type User {
   id: UUID!
   email: String!
-  name: String!
   userType: UserType!
+  salt: String!
 }
 
 enum UserType {
@@ -218,7 +218,7 @@ input UpdateUserInput {
 
 """Represents an update to a `User`. Fields that are set will be updated."""
 input UserPatch {
-  name: String
+  salt: String
 }
 
 """The output of our delete `Class` mutation."""

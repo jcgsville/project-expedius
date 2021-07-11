@@ -7,6 +7,7 @@ import {
     saveLoginFlow,
     selectSrpCredsByEmail,
 } from '../sql/generated'
+import { EgUserRole } from '../types/EgUserRole'
 import { queryOne } from '../utils/pg-query-utils'
 
 let srpServer: SRPServer
@@ -53,6 +54,9 @@ export const SrpLoginFlowPlugin = makeExtendSchemaPlugin(() => ({
     resolvers: {
         Mutation: {
             initiateSrpLogin: async (_mutation, args, context) => {
+                if (context.userRole !== EgUserRole.ANON) {
+                    throw new Error('Cannot login while in existing session.')
+                }
                 const { email, clientPublicKey } = args.input
                 const { rows } = await context.pgClient.query(
                     selectSrpCredsByEmail({ email })
@@ -93,6 +97,9 @@ export const SrpLoginFlowPlugin = makeExtendSchemaPlugin(() => ({
                 }
             },
             completeSrpLogin: async (_mutation, args, context) => {
+                if (context.userRole !== EgUserRole.ANON) {
+                    throw new Error('Cannot login while in existing session.')
+                }
                 const { loginFlowId, clientProof } = args.input
                 const { rows } = await context.pgClient.query(
                     retrieveLoginFlow({ loginFlowId })

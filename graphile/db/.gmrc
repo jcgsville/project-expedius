@@ -39,7 +39,7 @@
    * these.
    */
     "placeholders": {
-        ":DATABASE_MIGRATOR": "!ENV",
+        ":MIGRATOR_ROLE": "!ENV",
         ":API_ROLE": "!ENV"
     },
     /*
@@ -62,12 +62,23 @@
    */
     "afterReset": [
         // "after_reset.sql",
+        // {
+        //     "_": "sql",
+        //     "file": "init.sql",
+        //     "root": true
+        // }
         {
-            "_": "sql",
-            "file": "init.sql",
-            "root": true
+            "_": "command",
+            "command": "yarn run init-cluster:dev",
+            // This only sets up cluster level objects, so it only needs
+            // to be run once. Might as well be on primary db, not shadow;
+            "shadow": false
+        },
+        {
+            "_": "command",
+            "root": true,
+            "command": "yarn run init-db"
         }
-        // { "_": "command", "command": "graphile-worker --schema-only" },
     ],
     /*
    * afterAllMigrations: actions executed once all migrations are complete.

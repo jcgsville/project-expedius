@@ -6,6 +6,7 @@ import { EgUserRole } from '../types/EgUserRole'
 import { UserType } from '../types/UserType'
 import { queryOne } from '../utils/pg-query-utils'
 import { withPgClient } from '../utils/with-pg-client'
+import { ERROR_CODES } from './error-middleware'
 
 const SESSION_HEADER_REGEXP = /Session (?<sessionId>.+)/
 
@@ -27,10 +28,21 @@ export const generateSessionMiddleware = (pgPool: Pool): RequestHandler => {
                     req.userRole = roleForUserType(userType)
                     next()
                 } else {
-                    res.sendStatus(401)
+                    res.status(401)
+                        .json({
+                            errors: [
+                                {
+                                    code: ERROR_CODES.UNAUTHORIZED,
+                                    message:
+                                        'Session has expired or is not present.',
+                                },
+                            ],
+                        })
+                        .send()
                 }
             })
         } else {
+            req.userRole = EgUserRole.ANON
             next()
         }
     }
@@ -44,9 +56,9 @@ const sessionIdAuthHeader = (
 const roleForUserType = (userType: UserType): EgUserRole => {
     switch (userType) {
         case 'STUDENT':
-            return 'eg_student'
+            return EgUserRole.STUDENT
         case 'TEACHER':
-            return 'eg_teacher'
+            return EgUserRole.TEACHER
         default:
             assertExhaustiveRoleType(userType)
     }

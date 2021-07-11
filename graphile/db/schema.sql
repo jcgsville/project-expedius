@@ -175,9 +175,9 @@ ALTER FUNCTION eg_hidden.initiate_session(session_id text, user_id uuid) OWNER T
 
 CREATE TABLE eg_private.login_flow (
     id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    user_id uuid NOT NULL,
     serialized_server_state text NOT NULL,
-    expires_at timestamp with time zone NOT NULL,
-    user_id uuid NOT NULL
+    expires_at timestamp with time zone NOT NULL
 );
 
 
@@ -227,16 +227,15 @@ ALTER FUNCTION eg_hidden.save_login_flow(user_id uuid, serialized_server_state t
 --
 
 CREATE FUNCTION eg_hidden.srp_creds_by_email(user_email extensions.citext) RETURNS eg_hidden.srp_creds
-    LANGUAGE sql STRICT SECURITY DEFINER
+    LANGUAGE sql STABLE STRICT SECURITY DEFINER
     SET search_path TO 'extensions'
     AS $$
     select
         u.id,
-        uli.salt,
+        u.salt,
         us.verifier
     from eg_public.user u
-    join eg_public.user_login_info uli on u.id = uli.user_id
-    join eg_private.user_secrets us on u.id = us.user_id
+    join eg_private.user_secrets us on u.id = us.id
     where u.email = user_email;
 $$;
 
@@ -250,10 +249,9 @@ ALTER FUNCTION eg_hidden.srp_creds_by_email(user_email extensions.citext) OWNER 
 CREATE TABLE eg_public."user" (
     id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     email extensions.citext NOT NULL,
-    name text NOT NULL,
     user_type eg_public.user_type NOT NULL,
-    CONSTRAINT user_email_check CHECK ((email OPERATOR(extensions.~) '^.+@.+\..+$'::extensions.citext)),
-    CONSTRAINT user_name_check CHECK ((length(name) > 1))
+    salt text NOT NULL,
+    CONSTRAINT user_email_check CHECK ((email OPERATOR(extensions.~) '^.+@.+\..+$'::extensions.citext))
 );
 
 
@@ -355,32 +353,19 @@ begin
     with inserted_user as (
         insert into eg_public.user (
             email,
-            name,
-            user_type
+            user_type,
+            salt
         ) values (
             _email,
-            -- We'll get back to names. I'm not sure I want them on public.user
-            -- and I'm not sure I want them to be required.
-            'Bob',
-            user_type
+            user_type,
+            salt
         ) returning *
-    ), secrets as (
-        insert into eg_private.user_secrets (
-            user_id,
-            verifier
-        ) select
-            u.id,
-            verifier
-        from inserted_user u
-        returning *
-    ) insert into eg_public.user_login_info (
-        user_id,
-        email,
-        salt
+    ) insert into eg_private.user_secrets (
+        id,
+        verifier
     ) select
         u.id,
-        u.email,
-        salt
+        verifier
     from inserted_user u;
 
     return 'SUCCESS';
@@ -395,10 +380,11 @@ ALTER FUNCTION eg_public.sign_up(email extensions.citext, user_type eg_public.us
 --
 
 CREATE FUNCTION eg_public.user_login_salt(user_email extensions.citext) RETURNS text
-    LANGUAGE sql STABLE
+    LANGUAGE sql STABLE STRICT SECURITY DEFINER
+    SET search_path TO 'extensions'
     AS $$
     select salt
-    from eg_public.user_login_info
+    from eg_public.user
     where email = user_email;
 $$;
 
@@ -425,7 +411,7 @@ ALTER FUNCTION eg_public.viewer() OWNER TO eg_migrator;
 --
 
 CREATE TABLE eg_private.user_secrets (
-    user_id uuid NOT NULL,
+    id uuid NOT NULL,
     verifier text NOT NULL
 );
 
@@ -445,19 +431,6 @@ CREATE TABLE eg_public.class (
 
 
 ALTER TABLE eg_public.class OWNER TO eg_migrator;
-
---
--- Name: user_login_info; Type: TABLE; Schema: eg_public; Owner: eg_migrator
---
-
-CREATE TABLE eg_public.user_login_info (
-    user_id uuid NOT NULL,
-    email extensions.citext NOT NULL,
-    salt text NOT NULL
-);
-
-
-ALTER TABLE eg_public.user_login_info OWNER TO eg_migrator;
 
 --
 -- Name: login_flow login_flow_pkey; Type: CONSTRAINT; Schema: eg_private; Owner: eg_migrator
@@ -480,7 +453,7 @@ ALTER TABLE ONLY eg_private.session
 --
 
 ALTER TABLE ONLY eg_private.user_secrets
-    ADD CONSTRAINT user_secrets_pkey PRIMARY KEY (user_id);
+    ADD CONSTRAINT user_secrets_pkey PRIMARY KEY (id);
 
 
 --
@@ -492,27 +465,11 @@ ALTER TABLE ONLY eg_public.class
 
 
 --
--- Name: user unique_email; Type: CONSTRAINT; Schema: eg_public; Owner: eg_migrator
+-- Name: user user_email_key; Type: CONSTRAINT; Schema: eg_public; Owner: eg_migrator
 --
 
 ALTER TABLE ONLY eg_public."user"
-    ADD CONSTRAINT unique_email UNIQUE (email);
-
-
---
--- Name: user unique_email_id; Type: CONSTRAINT; Schema: eg_public; Owner: eg_migrator
---
-
-ALTER TABLE ONLY eg_public."user"
-    ADD CONSTRAINT unique_email_id UNIQUE (email, id);
-
-
---
--- Name: user_login_info user_login_info_pkey; Type: CONSTRAINT; Schema: eg_public; Owner: eg_migrator
---
-
-ALTER TABLE ONLY eg_public.user_login_info
-    ADD CONSTRAINT user_login_info_pkey PRIMARY KEY (user_id);
+    ADD CONSTRAINT user_email_key UNIQUE (email);
 
 
 --
@@ -542,13 +499,6 @@ CREATE INDEX session_user_id_idx ON eg_private.session USING btree (user_id);
 --
 
 CREATE INDEX class_teacher_id ON eg_public.class USING btree (teacher_id);
-
-
---
--- Name: user_login_info_email_idx; Type: INDEX; Schema: eg_public; Owner: eg_migrator
---
-
-CREATE INDEX user_login_info_email_idx ON eg_public.user_login_info USING btree (email);
 
 
 --
@@ -596,11 +546,11 @@ ALTER TABLE ONLY eg_private.session
 
 
 --
--- Name: user_secrets user_secrets_user_id_fkey; Type: FK CONSTRAINT; Schema: eg_private; Owner: eg_migrator
+-- Name: user_secrets user_secrets_id_fkey; Type: FK CONSTRAINT; Schema: eg_private; Owner: eg_migrator
 --
 
 ALTER TABLE ONLY eg_private.user_secrets
-    ADD CONSTRAINT user_secrets_user_id_fkey FOREIGN KEY (user_id) REFERENCES eg_public."user"(id) ON DELETE CASCADE;
+    ADD CONSTRAINT user_secrets_id_fkey FOREIGN KEY (id) REFERENCES eg_public."user"(id) ON DELETE CASCADE;
 
 
 --
@@ -608,15 +558,7 @@ ALTER TABLE ONLY eg_private.user_secrets
 --
 
 ALTER TABLE ONLY eg_public.class
-    ADD CONSTRAINT class_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES eg_public."user"(id);
-
-
---
--- Name: user user_id_login_info_fkey; Type: FK CONSTRAINT; Schema: eg_public; Owner: eg_migrator
---
-
-ALTER TABLE ONLY eg_public."user"
-    ADD CONSTRAINT user_id_login_info_fkey FOREIGN KEY (id) REFERENCES eg_public.user_login_info(user_id) ON DELETE RESTRICT;
+    ADD CONSTRAINT class_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES eg_public."user"(id) ON DELETE RESTRICT;
 
 
 --
@@ -624,23 +566,7 @@ ALTER TABLE ONLY eg_public."user"
 --
 
 ALTER TABLE ONLY eg_public."user"
-    ADD CONSTRAINT user_id_secrets_fkey FOREIGN KEY (id) REFERENCES eg_private.user_secrets(user_id) ON DELETE RESTRICT;
-
-
---
--- Name: user_login_info user_login_info_user_id_email_fkey; Type: FK CONSTRAINT; Schema: eg_public; Owner: eg_migrator
---
-
-ALTER TABLE ONLY eg_public.user_login_info
-    ADD CONSTRAINT user_login_info_user_id_email_fkey FOREIGN KEY (user_id, email) REFERENCES eg_public."user"(id, email) ON DELETE CASCADE;
-
-
---
--- Name: user_login_info user_login_info_user_id_fkey; Type: FK CONSTRAINT; Schema: eg_public; Owner: eg_migrator
---
-
-ALTER TABLE ONLY eg_public.user_login_info
-    ADD CONSTRAINT user_login_info_user_id_fkey FOREIGN KEY (user_id) REFERENCES eg_public."user"(id) ON DELETE CASCADE;
+    ADD CONSTRAINT user_id_secrets_fkey FOREIGN KEY (id) REFERENCES eg_private.user_secrets(id) ON DELETE RESTRICT;
 
 
 --
@@ -657,6 +583,7 @@ GRANT USAGE ON SCHEMA eg_hidden TO eg_anon;
 -- Name: SCHEMA eg_public; Type: ACL; Schema: -; Owner: eg_migrator
 --
 
+GRANT USAGE ON SCHEMA eg_public TO eg_anon;
 GRANT USAGE ON SCHEMA eg_public TO eg_student;
 GRANT USAGE ON SCHEMA eg_public TO eg_teacher;
 
@@ -667,8 +594,58 @@ GRANT USAGE ON SCHEMA eg_public TO eg_teacher;
 
 GRANT USAGE ON SCHEMA extensions TO eg_api;
 GRANT USAGE ON SCHEMA extensions TO eg_anon;
-GRANT USAGE ON SCHEMA extensions TO eg_student;
 GRANT USAGE ON SCHEMA extensions TO eg_teacher;
+GRANT USAGE ON SCHEMA extensions TO eg_student;
+
+
+--
+-- Name: FUNCTION current_user_id(); Type: ACL; Schema: eg_hidden; Owner: eg_migrator
+--
+
+REVOKE ALL ON FUNCTION eg_hidden.current_user_id() FROM PUBLIC;
+GRANT ALL ON FUNCTION eg_hidden.current_user_id() TO eg_anon;
+GRANT ALL ON FUNCTION eg_hidden.current_user_id() TO eg_student;
+GRANT ALL ON FUNCTION eg_hidden.current_user_id() TO eg_teacher;
+
+
+--
+-- Name: FUNCTION initiate_session(session_id text, user_id uuid); Type: ACL; Schema: eg_hidden; Owner: eg_migrator
+--
+
+REVOKE ALL ON FUNCTION eg_hidden.initiate_session(session_id text, user_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION eg_hidden.initiate_session(session_id text, user_id uuid) TO eg_anon;
+GRANT ALL ON FUNCTION eg_hidden.initiate_session(session_id text, user_id uuid) TO eg_student;
+GRANT ALL ON FUNCTION eg_hidden.initiate_session(session_id text, user_id uuid) TO eg_teacher;
+
+
+--
+-- Name: FUNCTION retrieve_login_flow(login_flow_id uuid); Type: ACL; Schema: eg_hidden; Owner: eg_migrator
+--
+
+REVOKE ALL ON FUNCTION eg_hidden.retrieve_login_flow(login_flow_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION eg_hidden.retrieve_login_flow(login_flow_id uuid) TO eg_anon;
+GRANT ALL ON FUNCTION eg_hidden.retrieve_login_flow(login_flow_id uuid) TO eg_student;
+GRANT ALL ON FUNCTION eg_hidden.retrieve_login_flow(login_flow_id uuid) TO eg_teacher;
+
+
+--
+-- Name: FUNCTION save_login_flow(user_id uuid, serialized_server_state text); Type: ACL; Schema: eg_hidden; Owner: eg_migrator
+--
+
+REVOKE ALL ON FUNCTION eg_hidden.save_login_flow(user_id uuid, serialized_server_state text) FROM PUBLIC;
+GRANT ALL ON FUNCTION eg_hidden.save_login_flow(user_id uuid, serialized_server_state text) TO eg_anon;
+GRANT ALL ON FUNCTION eg_hidden.save_login_flow(user_id uuid, serialized_server_state text) TO eg_student;
+GRANT ALL ON FUNCTION eg_hidden.save_login_flow(user_id uuid, serialized_server_state text) TO eg_teacher;
+
+
+--
+-- Name: FUNCTION srp_creds_by_email(user_email extensions.citext); Type: ACL; Schema: eg_hidden; Owner: eg_migrator
+--
+
+REVOKE ALL ON FUNCTION eg_hidden.srp_creds_by_email(user_email extensions.citext) FROM PUBLIC;
+GRANT ALL ON FUNCTION eg_hidden.srp_creds_by_email(user_email extensions.citext) TO eg_anon;
+GRANT ALL ON FUNCTION eg_hidden.srp_creds_by_email(user_email extensions.citext) TO eg_student;
+GRANT ALL ON FUNCTION eg_hidden.srp_creds_by_email(user_email extensions.citext) TO eg_teacher;
 
 
 --
@@ -680,37 +657,86 @@ GRANT SELECT ON TABLE eg_public."user" TO eg_teacher;
 
 
 --
+-- Name: FUNCTION user_by_session_id(session_id text); Type: ACL; Schema: eg_hidden; Owner: eg_migrator
+--
+
+REVOKE ALL ON FUNCTION eg_hidden.user_by_session_id(session_id text) FROM PUBLIC;
+GRANT ALL ON FUNCTION eg_hidden.user_by_session_id(session_id text) TO eg_anon;
+GRANT ALL ON FUNCTION eg_hidden.user_by_session_id(session_id text) TO eg_student;
+GRANT ALL ON FUNCTION eg_hidden.user_by_session_id(session_id text) TO eg_teacher;
+
+
+--
+-- Name: FUNCTION tg__class__teacher_correct_user_type(); Type: ACL; Schema: eg_private; Owner: eg_migrator
+--
+
+REVOKE ALL ON FUNCTION eg_private.tg__class__teacher_correct_user_type() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION tg__login_flow__delete_expired(); Type: ACL; Schema: eg_private; Owner: eg_migrator
+--
+
+REVOKE ALL ON FUNCTION eg_private.tg__login_flow__delete_expired() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION tg__user__type_uneditable(); Type: ACL; Schema: eg_private; Owner: eg_migrator
+--
+
+REVOKE ALL ON FUNCTION eg_private.tg__user__type_uneditable() FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION sign_up(email extensions.citext, user_type eg_public.user_type, verifier text, salt text); Type: ACL; Schema: eg_public; Owner: eg_migrator
 --
 
-GRANT ALL ON FUNCTION eg_public.sign_up(email extensions.citext, user_type eg_public.user_type, verifier text, salt text) TO eg_student;
-GRANT ALL ON FUNCTION eg_public.sign_up(email extensions.citext, user_type eg_public.user_type, verifier text, salt text) TO eg_teacher;
+REVOKE ALL ON FUNCTION eg_public.sign_up(email extensions.citext, user_type eg_public.user_type, verifier text, salt text) FROM PUBLIC;
+GRANT ALL ON FUNCTION eg_public.sign_up(email extensions.citext, user_type eg_public.user_type, verifier text, salt text) TO eg_anon;
 
 
 --
 -- Name: FUNCTION user_login_salt(user_email extensions.citext); Type: ACL; Schema: eg_public; Owner: eg_migrator
 --
 
-GRANT ALL ON FUNCTION eg_public.user_login_salt(user_email extensions.citext) TO eg_student;
-GRANT ALL ON FUNCTION eg_public.user_login_salt(user_email extensions.citext) TO eg_teacher;
+REVOKE ALL ON FUNCTION eg_public.user_login_salt(user_email extensions.citext) FROM PUBLIC;
+GRANT ALL ON FUNCTION eg_public.user_login_salt(user_email extensions.citext) TO eg_anon;
 
 
 --
 -- Name: FUNCTION viewer(); Type: ACL; Schema: eg_public; Owner: eg_migrator
 --
 
-GRANT ALL ON FUNCTION eg_public.viewer() TO eg_student;
-GRANT ALL ON FUNCTION eg_public.viewer() TO eg_teacher;
+REVOKE ALL ON FUNCTION eg_public.viewer() FROM PUBLIC;
 
 
 --
--- Name: DEFAULT PRIVILEGES FOR FUNCTIONS; Type: DEFAULT ACL; Schema: eg_public; Owner: eg_migrator
+-- Name: DEFAULT PRIVILEGES FOR FUNCTIONS; Type: DEFAULT ACL; Schema: eg_hidden; Owner: eg_migrator
 --
 
-ALTER DEFAULT PRIVILEGES FOR ROLE eg_migrator IN SCHEMA eg_public REVOKE ALL ON FUNCTIONS  FROM PUBLIC;
-ALTER DEFAULT PRIVILEGES FOR ROLE eg_migrator IN SCHEMA eg_public REVOKE ALL ON FUNCTIONS  FROM eg_migrator;
-ALTER DEFAULT PRIVILEGES FOR ROLE eg_migrator IN SCHEMA eg_public GRANT ALL ON FUNCTIONS  TO eg_student;
-ALTER DEFAULT PRIVILEGES FOR ROLE eg_migrator IN SCHEMA eg_public GRANT ALL ON FUNCTIONS  TO eg_teacher;
+ALTER DEFAULT PRIVILEGES FOR ROLE eg_migrator IN SCHEMA eg_hidden REVOKE ALL ON FUNCTIONS  FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES FOR ROLE eg_migrator IN SCHEMA eg_hidden REVOKE ALL ON FUNCTIONS  FROM eg_migrator;
+ALTER DEFAULT PRIVILEGES FOR ROLE eg_migrator IN SCHEMA eg_hidden GRANT ALL ON FUNCTIONS  TO eg_anon;
+ALTER DEFAULT PRIVILEGES FOR ROLE eg_migrator IN SCHEMA eg_hidden GRANT ALL ON FUNCTIONS  TO eg_student;
+ALTER DEFAULT PRIVILEGES FOR ROLE eg_migrator IN SCHEMA eg_hidden GRANT ALL ON FUNCTIONS  TO eg_teacher;
+
+
+--
+-- Name: DEFAULT PRIVILEGES FOR FUNCTIONS; Type: DEFAULT ACL; Schema: extensions; Owner: eg_migrator
+--
+
+ALTER DEFAULT PRIVILEGES FOR ROLE eg_migrator IN SCHEMA extensions REVOKE ALL ON FUNCTIONS  FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES FOR ROLE eg_migrator IN SCHEMA extensions REVOKE ALL ON FUNCTIONS  FROM eg_migrator;
+ALTER DEFAULT PRIVILEGES FOR ROLE eg_migrator IN SCHEMA extensions GRANT ALL ON FUNCTIONS  TO eg_anon;
+ALTER DEFAULT PRIVILEGES FOR ROLE eg_migrator IN SCHEMA extensions GRANT ALL ON FUNCTIONS  TO eg_student;
+ALTER DEFAULT PRIVILEGES FOR ROLE eg_migrator IN SCHEMA extensions GRANT ALL ON FUNCTIONS  TO eg_teacher;
+
+
+--
+-- Name: DEFAULT PRIVILEGES FOR FUNCTIONS; Type: DEFAULT ACL; Schema: -; Owner: eg_migrator
+--
+
+ALTER DEFAULT PRIVILEGES FOR ROLE eg_migrator REVOKE ALL ON FUNCTIONS  FROM PUBLIC;
 
 
 --

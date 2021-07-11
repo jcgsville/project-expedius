@@ -27,21 +27,11 @@ export const SmartTagsPlugin = makeJSONPgSmartTagsPlugin({
                     },
                 },
                 constraint: {
-                    unique_email_id: {
+                    user_email_key: {
                         tags: {
                             omit: true,
                         },
                     },
-                    unique_email: {
-                        tags: {
-                            omit: true,
-                        },
-                    },
-                },
-            },
-            'eg_public.user_login_info': {
-                tags: {
-                    omit: true,
                 },
             },
             'eg_public.class': {

@@ -5,6 +5,7 @@ import { generatePostgraphileOptions } from './postgraphile-options'
 import { constructPgPool } from './utils/construct-pg-pool'
 import { envVarToBool, portFromEnv } from './utils/env-utils'
 import { generateSessionMiddleware } from './middleware/session-middleware'
+import { errorMiddleware } from './middleware/error-middleware'
 
 const port = portFromEnv('PORT', 13001)
 
@@ -20,6 +21,7 @@ const app = express()
 app.use(cookieParser())
 app.use(generateSessionMiddleware(pgPool))
 app.use(postgraphileMiddleware)
+app.use(errorMiddleware)
 
 if (envVarToBool('EXPORT_GQL_SCHEMA_ONLY')) {
     console.log('Exporting the schema only. Returning before starting server.')

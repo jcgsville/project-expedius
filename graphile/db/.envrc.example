@@ -1,15 +1,29 @@
+# This is the name of the database, and the base of the shadow
+# database used in dev environments
+export DATABASE_NAME="eg"
+
 # This is the user used to run migrations. It owns the DB,
 # the schema, the tables, the functions. Everything.
-export DATABASE_MIGRATOR="eg_migrator"
-export DATABASE_MIGRATOR_PASSWORD="password_goes_here"
+export MIGRATOR_ROLE="eg_migrator"
+export MIGRATOR_ROLE_PASSWORD="password_goes_here"
+
+# This is the user that the postgraphile API is run as.
+# It only has minimal permissions, and the ability to
+# assume the application roles
+export API_ROLE="eg_api"
+export API_ROLE_PASSWORD="password_goes_here"
 
 # This is the URL for your actual application database
-export DATABASE_URL="postgres://${DATABASE_MIGRATOR}:${DATABASE_MIGRATOR_PASSWORD}@localhost/eg"
+export DATABASE_URL="postgres://${MIGRATOR_ROLE}:${MIGRATOR_ROLE_PASSWORD}@localhost:5432/eg"
 
 # This is the URL for the "shadow" database used by graphile migrate
 # Only used in development
-export SHADOW_DATABASE_URL="postgres://${DATABASE_MIGRATOR}:${DATABASE_MIGRATOR_PASSWORD}@localhost/eg_shadow"
+export SHADOW_DATABASE_URL="postgres://${MIGRATOR_ROLE}:${MIGRATOR_ROLE_PASSWORD}@localhost:5432/eg_shadow"
 
-# This is the URL with root database credentials
-# Only used in development
-export ROOT_DATABASE_URL="postgres://postgres:postgres@localhost/postgres"
+# This is the URL with root database credentials to connect to the auto-created DB in thee postgres
+# cluster. This is used to run the init cluster script and to reset dev DBs using graphile-migrate reset
+export ROOT_DATABASE_URL="postgres://postgres:postgres@localhost:5432/postgres"
+
+# This is the URL used to initialize the db. This script only performs queries that need
+# to be run as a super user: dropping public schema, extension setup, etc
+export SUPER_USER_DATABASE_URL="postgres://postgres:postgres@localhost:5432/eg"
