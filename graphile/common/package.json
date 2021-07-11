@@ -1,0 +1,13 @@
+{
+    "name": "expedius-graphile-common-code",
+    "version": "0.0.1",
+    "description": "Project expedius using the graphile suite - common code between API, DB scripts, worker, etc",
+    "license": "MIT",
+    "scripts": {
+        "build": "tsc",
+        "lint": "eslint \"src/**/*.ts\"",
+        "lint:fix": "eslint \"src/**/*.ts\" --fix"
+    },
+    "dependencies": {},
+    "devDependencies": {}
+}

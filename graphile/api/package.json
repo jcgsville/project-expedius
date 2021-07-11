@@ -4,13 +4,13 @@
     "description": "Project expedius using the graphile suite - the API source",
     "license": "MIT",
     "scripts": {
-        "bin:login": "ts-node src/bin/login-script.ts",
+        "bin:login": "ts-node -r tsconfig-paths/register src/bin/login-script.ts",
         "build": "tsc",
         "export-gql-schema": "EXPORT_GQL_SCHEMA_ONLY=t yarn run start:local",
         "generate:sureql": "mkdir -p ./src/sql/generated && rm -rf ./src/sql/generated/* && yarn run sureql ./src/sql/queries ./src/sql/generated",
         "lint": "eslint \"src/**/*.ts\"",
         "lint:fix": "eslint \"src/**/*.ts\" --fix",
-        "start:local": "ts-node src/index.ts",
+        "start:local": "ts-node -r tsconfig-paths/register src/index.ts",
         "start:nodemon": "yarn run nodemon",
         "start": "node .build/index.js"
     },

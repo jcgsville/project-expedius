@@ -1,7 +1,7 @@
 import { createClient, gql } from '@urql/core'
 import 'cross-fetch/polyfill'
 import { SRPClient } from 'srp6a'
-import { requireEnvVar } from '../utils/env-utils'
+import { requireEnvVar } from '~common/utils/env-utils'
 
 const SALT_QUERY = gql`
     query Salt($userEmail: String!) {

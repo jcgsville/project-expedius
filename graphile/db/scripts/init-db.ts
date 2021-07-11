@@ -1,8 +1,8 @@
 import { Client } from 'pg'
 import format from 'pg-format'
-import { requireEnvVar } from './utils/require-env-var'
+import { requireEnvVar } from '~common/utils/env-utils'
 import yargsInteractive, { Option } from 'yargs-interactive'
-import { EgUserRole } from './utils/EgUserRole'
+import { EgUserRole } from '~common/models/EgUserRole'
 
 // Script to setup DB. Run before graphile migrate's migrations.
 // Script needs to be idemptotent.

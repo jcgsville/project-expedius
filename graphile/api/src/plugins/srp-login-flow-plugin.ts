@@ -7,7 +7,7 @@ import {
     saveLoginFlow,
     selectSrpCredsByEmail,
 } from '../sql/generated'
-import { EgUserRole } from '../types/EgUserRole'
+import { EgUserRole } from '~common/models/EgUserRole'
 import { queryOne } from '../utils/pg-query-utils'
 
 let srpServer: SRPServer

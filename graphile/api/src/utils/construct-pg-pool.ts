@@ -1,5 +1,5 @@
 import { Pool } from 'pg'
-import { requireEnvVar } from './env-utils'
+import { requireEnvVar } from '~common/utils/env-utils'
 
 export const constructPgPool = (): Pool => {
     const dbConnectionString = requireEnvVar('DATABASE_URL')

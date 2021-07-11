@@ -1,8 +1,8 @@
 import { Client } from 'pg'
 import format from 'pg-format'
 import yargsInteractive, { Option } from 'yargs-interactive'
-import { EgUserRole } from './utils/EgUserRole'
-import { requireEnvVar } from './utils/require-env-var'
+import { EgUserRole } from '~common/models/EgUserRole'
+import { requireEnvVar } from '~common/utils/env-utils'
 
 // Script to set up cluster-level objects. Most (not all) of these
 // queries require super user access. Script is idempotent.

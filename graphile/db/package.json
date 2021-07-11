@@ -4,11 +4,11 @@
     "description": "Project expedius using the graphile suite - the DB migration tooling",
     "license": "MIT",
     "scripts": {
+        "init:cluster": "ts-node -r tsconfig-paths/register ./scripts/init-cluster.ts",
+        "init:cluster:dev": "ts-node -r tsconfig-paths/register ./scripts/init-cluster.ts --dev=y",
+        "init:db": "ts-node -r tsconfig-paths/register ./scripts/init-db.ts",
         "lint": "eslint \"src/**/*.ts\"",
         "lint:fix": "eslint \"src/**/*.ts\" --fix",
-        "init-db": "ts-node ./scripts/init-db.ts",
-        "init-cluster": "ts-node ./scripts/init-cluster.ts",
-        "init-cluster:dev": "ts-node ./scripts/init-cluster.ts --dev=y",
         "pgrita": "pgrita --token ${PG_RITA_TOKEN:?must be set} --project expedius/expedius-graphile --connection ${DATABASE_URL:?must be set}"
     },
     "dependencies": {
