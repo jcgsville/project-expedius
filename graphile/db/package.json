@@ -4,15 +4,17 @@
     "description": "Project expedius using the graphile suite - the DB migration tooling",
     "license": "MIT",
     "scripts": {
+        "init:all:dev": "yarn run init:cluster:dev && yarn run init:db:dev",
         "init:cluster": "ts-node -r tsconfig-paths/register ./scripts/init-cluster.ts",
-        "init:cluster:dev": "ts-node -r tsconfig-paths/register ./scripts/init-cluster.ts --dev=y",
+        "init:cluster:dev": "yarn run init:cluster && yarn run init:cluster --databaseName=${SHADOW_DATABASE_NAME:?must be set}",
         "init:db": "ts-node -r tsconfig-paths/register ./scripts/init-db.ts",
+        "init:db:dev": "yarn run init:db && yarn run init:db --superUserDatabaseUrl=${SHADOW_SUPER_USER_DATABASE_URL:?must be set} --databaseName=${SHADOW_DATABASE_NAME:?must be set}",
         "lint": "eslint \"src/**/*.ts\"",
         "lint:fix": "eslint \"src/**/*.ts\" --fix",
         "pgrita": "pgrita --token ${PG_RITA_TOKEN:?must be set} --project expedius/expedius-graphile --connection ${DATABASE_URL:?must be set}"
     },
     "dependencies": {
-        "graphile-migrate": "^1.0.2",
+        "graphile-migrate": "^1.3.0",
         "pg-format": "^1.0.4",
         "pgrita": "^1.1.2"
     },

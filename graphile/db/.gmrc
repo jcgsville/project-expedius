@@ -61,23 +61,14 @@
    * afterReset: actions executed after a `graphile-migrate reset` command.
    */
     "afterReset": [
-        // "after_reset.sql",
-        // {
-        //     "_": "sql",
-        //     "file": "init.sql",
-        //     "root": true
-        // }
         {
             "_": "command",
-            "command": "yarn run init:cluster:dev",
-            // This only sets up cluster level objects, so it only needs
-            // to be run once. Might as well be on primary db, not shadow;
-            "shadow": false
+            "command": "yarn run init:cluster --rootDatabaseUrl=${GM_DBURL:?must be set} --databaseName=${GM_DBNAME:?must be set}"
         },
         {
             "_": "command",
             "root": true,
-            "command": "yarn run init:db"
+            "command": "yarn run init:db --superUserDatabaseUrl=${GM_DBURL:?must be set} --databaseName=${GM_DBNAME:?must be set}"
         }
     ],
     /*

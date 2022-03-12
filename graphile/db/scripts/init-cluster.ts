@@ -11,11 +11,23 @@ const YARGS_OPTIONS: Option = {
     interactive: {
         default: true,
     },
-    dev: {
-        type: 'checkbox',
-        describe: 'Whether or not this is a development environment',
-        default: false,
-        prompt: 'never',
+    rootDatabaseUrl: {
+        type: 'input',
+        describe: 'Root connection string used to initialize cluster',
+        default: process.env.ROOT_DATABASE_URL,
+        prompt: 'if-empty',
+    },
+    rootRole: {
+        type: 'input',
+        describe: 'Root role name',
+        default: process.env.ROOT_ROLE,
+        prompt: 'if-empty',
+    },
+    databaseName: {
+        type: 'input',
+        describe: 'Name of the database being initialized',
+        default: process.env.DATABASE_NAME,
+        prompt: 'if-empty',
     },
 }
 
@@ -23,21 +35,23 @@ const main = async (): Promise<void> => {
     const args = await yargsInteractive()
         .usage('$0 [args]')
         .interactive(YARGS_OPTIONS)
-    await initCluster(args.dev)
+    await initCluster(args.rootDatabaseUrl, args.rootRole, args.databaseName)
 }
 
 const PG_PUBLIC_ROLE_NAME = 'public'
 
-const initCluster = async (isDev: boolean): Promise<void> => {
-    const databaseName = requireEnvVar('DATABASE_NAME')
-    const shadowDatabaseName = `${databaseName}_shadow`
+const initCluster = async (
+    rootDatabaseUrl: string,
+    rootRoleName: string,
+    databaseName: string
+): Promise<void> => {
     const migratorRoleName = requireEnvVar('MIGRATOR_ROLE')
     const migratorRolePassword = requireEnvVar('MIGRATOR_ROLE_PASSWORD')
     const apiRoleName = requireEnvVar('API_ROLE')
     const apiRolePassword = requireEnvVar('API_ROLE_PASSWORD')
 
     const pgClient = new Client({
-        connectionString: requireEnvVar('ROOT_DATABASE_URL'),
+        connectionString: rootDatabaseUrl,
     })
     await pgClient.connect()
 
@@ -47,20 +61,17 @@ const initCluster = async (isDev: boolean): Promise<void> => {
             migratorRoleName,
             migratorRolePassword
         )
+        await grantRoleMembershipIfNecessary(
+            pgClient,
+            migratorRoleName,
+            rootRoleName
+        )
         await createDbIfNotExists(pgClient, databaseName, migratorRoleName)
         await grantConnectPrivelegesIfNecessary(
             pgClient,
             migratorRoleName,
             databaseName
         )
-
-        if (isDev) {
-            await createDbIfNotExists(
-                pgClient,
-                shadowDatabaseName,
-                migratorRoleName
-            )
-        }
 
         await creatLoginRoleIfNotExists(pgClient, apiRoleName, apiRolePassword)
         await grantConnectPrivelegesIfNecessary(

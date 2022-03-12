@@ -22,7 +22,7 @@ const YARGS_OPTIONS: Option = {
     interactive: {
         default: true,
     },
-    databaseUrl: {
+    superUserDatabaseUrl: {
         type: 'input',
         describe: 'Super user connection string used to initialize DB',
         default: process.env.SUPER_USER_DATABASE_URL,
@@ -40,24 +40,18 @@ const main = async (): Promise<void> => {
     const args = await yargsInteractive()
         .usage('$0 [args]')
         .interactive(YARGS_OPTIONS)
-    const databaseUrl = process.env.GM_SHADOW
-        ? `${args.databaseUrl}_shadow`
-        : args.databaseUrl
-    const databaseName = process.env.GM_SHADOW
-        ? `${args.databaseName}_shadow`
-        : args.databaseName
-    await initDb(databaseUrl, databaseName)
+    await initDb(args.superUserDatabaseUrl, args.databaseName)
 }
 
 const initDb = async (
-    databaseUrl: string,
+    superUserDatabaseUrl: string,
     databaseName: string
 ): Promise<void> => {
     const migratorRoleName = requireEnvVar('MIGRATOR_ROLE')
     const apiRoleName = requireEnvVar('API_ROLE')
 
     const pgClient = new Client({
-        connectionString: databaseUrl,
+        connectionString: superUserDatabaseUrl,
     })
     await pgClient.connect()
 

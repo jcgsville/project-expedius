@@ -1,6 +1,7 @@
 # This is the name of the database, and the base of the shadow
 # database used in dev environments
 export DATABASE_NAME="eg"
+export SHADOW_DATABASE_NAME="${DATABASE_NAME}_shadow"
 
 # This is the user used to run migrations. It owns the DB,
 # the schema, the tables, the functions. Everything.
@@ -19,10 +20,12 @@ export DATABASE_URL="postgres://${MIGRATOR_ROLE}:${MIGRATOR_ROLE_PASSWORD}@local
 # This is the URL for the "shadow" database used by graphile migrate
 # Only used in development
 export SHADOW_DATABASE_URL="postgres://${MIGRATOR_ROLE}:${MIGRATOR_ROLE_PASSWORD}@localhost:5432/eg_shadow"
+export SHADOW_SUPER_USER_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/${SHADOW_DATABASE_NAME}"
 
-# This is the URL with root database credentials to connect to the auto-created DB in thee postgres
+# This is the URL with root database credentials to connect to the auto-created DB in the postgres
 # cluster. This is used to run the init cluster script and to reset dev DBs using graphile-migrate reset
 export ROOT_DATABASE_URL="postgres://postgres:postgres@localhost:5432/postgres"
+export ROOT_ROLE="postgres"
 
 # This is the URL used to initialize the db. This script only performs queries that need
 # to be run as a super user: dropping public schema, extension setup, etc
